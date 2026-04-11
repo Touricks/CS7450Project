@@ -1,13 +1,17 @@
 /**
- * View 2: Trace Confidence Timeline
+ * View 2: Token Consumption Chart
  *
- * Horizontal timeline of execution steps.
- * - Shape encodes step type: circle=thought, rect=action, diamond=observation
- * - Color encodes confidence: dark blue (high) → yellow (low)
- * - Stacked area shows cumulative token count
- * - Trigger glyphs mark diagnosed steps (B1/B2/B3)
+ * Focused bar chart showing per-step token consumption.
+ * The execution flow (shapes, edges, causal chains) was removed because
+ * the Provenance Alignment View already encodes that information.
  *
- * D3 computes scales and positions; React renders all SVG elements.
+ * This view answers: "How much data flowed through each step?"
+ * - Bar height = token count per step
+ * - Bar color = red for causal-chain steps, blue for normal steps
+ * - Step labels below each bar with tool name
+ * - Highlighted bars on cross-view selection
+ *
+ * D3 computes scales; React renders all SVG via JSX.
  */
 
 import { useMemo } from "react";
@@ -15,208 +19,207 @@ import * as d3 from "d3";
 import type { TraceStep } from "../types/trace";
 import type { Diagnosis } from "../types/diagnosis";
 import { useSelection } from "../hooks/useSelectionContext";
-import { confidenceColorScale, STEP_TYPE_COLORS } from "../lib/colors";
-import { MECHANISM_LABELS } from "../types/diagnosis";
 
 interface Props {
   steps: TraceStep[];
   diagnoses: Diagnosis[];
 }
 
-const MARGIN = { top: 30, right: 20, bottom: 50, left: 40 };
+const MARGIN = { top: 24, right: 20, bottom: 48, left: 50 };
 const WIDTH = 700;
-const HEIGHT = 260;
+const HEIGHT = 200;
 const INNER_W = WIDTH - MARGIN.left - MARGIN.right;
 const INNER_H = HEIGHT - MARGIN.top - MARGIN.bottom;
-const NODE_R = 14;
-
-/** Render shape for step type (centered at 0,0) */
-function StepShape({ type, size }: { type: string; size: number }) {
-  switch (type) {
-    case "thought":
-      return <circle r={size} />;
-    case "action":
-      return <rect x={-size} y={-size} width={size * 2} height={size * 2} rx={3} />;
-    case "observation": {
-      const d = size * 1.2;
-      return <polygon points={`0,${-d} ${d},0 0,${d} ${-d},0`} />;
-    }
-    default:
-      return <circle r={size} />;
-  }
-}
 
 export function TraceConfidenceTimeline({ steps, diagnoses }: Props) {
-  const { selectedClaimId, highlightedStepIds, hoveredStepId, hoverStep, selectClaim } =
+  const { highlightedStepIds, hoveredStepId, hoverStep, selectClaim } =
     useSelection();
 
-  // Build a map: stepId → diagnosis mechanism (for trigger glyphs)
-  const stepDiagnosisMap = useMemo(() => {
+  // Steps in any causal chain
+  const causalStepIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const d of diagnoses) {
+      for (const sid of d.causal_chain) ids.add(sid);
+    }
+    return ids;
+  }, [diagnoses]);
+
+  // Root-cause steps with mechanism labels
+  const rootCauseMap = useMemo(() => {
     const map = new Map<number, string>();
     for (const d of diagnoses) {
-      for (const stepId of d.causal_chain) {
-        if (!map.has(stepId)) map.set(stepId, d.mechanism);
+      if (d.causal_chain.length > 0) {
+        const root = d.causal_chain[0];
+        if (!map.has(root)) map.set(root, d.mechanism);
       }
     }
     return map;
   }, [diagnoses]);
 
-  // X scale: step index → x position
+  const tokenCounts = useMemo(
+    () => steps.map((s) => s.token_count ?? 0),
+    [steps]
+  );
+
   const xScale = useMemo(
     () =>
-      d3
-        .scaleLinear()
-        .domain([0, steps.length - 1])
-        .range([0, INNER_W]),
+      d3.scaleBand<number>()
+        .domain(steps.map((_, i) => i))
+        .range([0, INNER_W])
+        .padding(0.25),
     [steps.length]
   );
 
-  // Token count area
-  const cumulativeTokens = useMemo(() => {
-    let total = 0;
-    return steps.map((s) => {
-      total += s.token_count ?? 0;
-      return total;
-    });
-  }, [steps]);
-
-  const tokenYScale = useMemo(
+  const yScale = useMemo(
     () =>
-      d3
-        .scaleLinear()
-        .domain([0, Math.max(...cumulativeTokens, 1)])
-        .range([INNER_H, INNER_H - 60]),
-    [cumulativeTokens]
+      d3.scaleLinear()
+        .domain([0, Math.max(...tokenCounts, 1)])
+        .range([INNER_H, 0])
+        .nice(),
+    [tokenCounts]
   );
 
-  const areaPath = useMemo(() => {
-    const area = d3
-      .area<number>()
-      .x((_, i) => xScale(i))
-      .y0(INNER_H)
-      .y1((d) => tokenYScale(d))
-      .curve(d3.curveMonotoneX);
-    return area(cumulativeTokens) ?? "";
-  }, [cumulativeTokens, xScale, tokenYScale]);
-
-  // X axis ticks
-  const xTicks = useMemo(
-    () => steps.map((s, i) => ({ x: xScale(i), label: `S${s.step_id}` })),
-    [steps, xScale]
-  );
+  // Y-axis ticks
+  const yTicks = useMemo(() => {
+    const scale = yScale as d3.ScaleLinear<number, number>;
+    return scale.ticks(4).map((v) => ({ y: scale(v), label: String(v) }));
+  }, [yScale]);
 
   return (
-    <svg width={WIDTH} height={HEIGHT} style={{ maxWidth: "100%", height: "auto" }}>
+    <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} style={{ width: "100%", height: "auto" }}>
       <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
-        {/* Token count area (background) */}
-        <path d={areaPath} fill="#e0e7ff" opacity={0.4} />
 
-        {/* Connection lines between steps */}
-        {steps.slice(0, -1).map((_, i) => (
-          <line
-            key={`edge-${i}`}
-            x1={xScale(i)}
-            y1={INNER_H / 2}
-            x2={xScale(i + 1)}
-            y2={INNER_H / 2}
-            stroke="#cbd5e1"
-            strokeWidth={2}
-          />
+        {/* Y-axis gridlines + labels */}
+        {yTicks.map((tick) => (
+          <g key={tick.label}>
+            <line
+              x1={0} y1={tick.y}
+              x2={INNER_W} y2={tick.y}
+              stroke="#f1f5f9" strokeWidth={1}
+            />
+            <text
+              x={-8} y={tick.y + 3}
+              textAnchor="end" fontSize={9} fill="#94a3b8"
+            >
+              {tick.label}
+            </text>
+          </g>
         ))}
 
-        {/* Step nodes */}
+        {/* Y-axis label */}
+        <text
+          x={-36} y={INNER_H / 2}
+          textAnchor="middle" fontSize={10} fill="#64748b"
+          transform={`rotate(-90, -36, ${INNER_H / 2})`}
+        >
+          tokens
+        </text>
+
+        {/* Baseline */}
+        <line x1={0} y1={INNER_H} x2={INNER_W} y2={INNER_H} stroke="#e2e8f0" strokeWidth={1} />
+
+        {/* Bars */}
         {steps.map((step, i) => {
-          const x = xScale(i);
-          const y = INNER_H / 2;
+          const tokens = step.token_count ?? 0;
+          const x = xScale(i) ?? 0;
+          const barW = xScale.bandwidth();
+          const barH = INNER_H - yScale(tokens);
+          const isCausal = causalStepIds.has(step.step_id);
           const isHighlighted = highlightedStepIds.includes(step.step_id);
           const isHovered = hoveredStepId === step.step_id;
-          const fillColor = confidenceColorScale(step.confidence);
-          const mechanism = stepDiagnosisMap.get(step.step_id);
+          const rootMech = rootCauseMap.get(step.step_id);
+
+          const barFill = isCausal ? "#fecaca" : "#dbeafe";
+          const barStroke = isCausal ? "#ef4444" : "#93c5fd";
+          const activeBarFill = isHighlighted ? (isCausal ? "#fca5a5" : "#bfdbfe") : barFill;
 
           return (
             <g
               key={step.step_id}
-              transform={`translate(${x},${y})`}
               style={{ cursor: "pointer" }}
               onMouseEnter={() => hoverStep(step.step_id)}
               onMouseLeave={() => hoverStep(null)}
               onClick={() => {
-                // Find a claim that references this step
                 const relatedDiag = diagnoses.find((d) =>
                   d.causal_chain.includes(step.step_id)
                 );
                 if (relatedDiag) selectClaim(relatedDiag.claim.claim_id);
               }}
             >
-              {/* Highlight ring */}
-              {(isHighlighted || isHovered) && (
-                <circle
-                  r={NODE_R + 4}
-                  fill="none"
-                  stroke={isHighlighted ? "#3b82f6" : "#94a3b8"}
-                  strokeWidth={2}
-                  strokeDasharray={isHovered && !isHighlighted ? "4,2" : "none"}
-                />
-              )}
+              {/* Bar */}
+              <rect
+                x={x}
+                y={yScale(tokens)}
+                width={barW}
+                height={barH}
+                rx={3}
+                fill={activeBarFill}
+                stroke={isHighlighted || isHovered ? "#3b82f6" : barStroke}
+                strokeWidth={isHighlighted || isHovered ? 2 : 1}
+                opacity={0.85}
+              />
 
-              {/* Step shape */}
-              <g fill={fillColor} stroke={STEP_TYPE_COLORS[step.step_type as keyof typeof STEP_TYPE_COLORS] ?? "#666"} strokeWidth={2}>
-                <StepShape type={step.step_type} size={NODE_R} />
-              </g>
-
-              {/* Step ID label */}
+              {/* Token count label above bar */}
               <text
-                y={-NODE_R - 8}
+                x={x + barW / 2}
+                y={yScale(tokens) - 5}
                 textAnchor="middle"
                 fontSize={10}
-                fill="#64748b"
-                fontWeight={isHighlighted ? 700 : 400}
+                fontWeight={tokens > 300 ? 700 : 400}
+                fill={isCausal ? "#dc2626" : "#3b82f6"}
+              >
+                {tokens}
+              </text>
+
+              {/* Root-cause mechanism badge on top of bar */}
+              {rootMech && (
+                <g transform={`translate(${x + barW / 2}, ${yScale(tokens) - 18})`}>
+                  <rect x={-12} y={-8} width={24} height={14} rx={3} fill="#dc2626" />
+                  <text
+                    textAnchor="middle" y={3}
+                    fontSize={8} fontWeight={700} fill="#fff"
+                  >
+                    {rootMech}
+                  </text>
+                </g>
+              )}
+
+              {/* X-axis: step label */}
+              <text
+                x={x + barW / 2}
+                y={INNER_H + 14}
+                textAnchor="middle"
+                fontSize={10}
+                fill={isCausal ? "#dc2626" : "#64748b"}
+                fontWeight={isCausal ? 600 : 400}
               >
                 S{step.step_id}
               </text>
 
-              {/* Trigger glyph (if diagnosed) */}
-              {mechanism && (
-                <text
-                  y={NODE_R + 16}
-                  textAnchor="middle"
-                  fontSize={9}
-                  fontWeight={700}
-                  fill={mechanism === "A" ? "#f97316" : "#ef4444"}
-                >
-                  {mechanism}
-                </text>
-              )}
+              {/* X-axis: tool/type sublabel */}
+              <text
+                x={x + barW / 2}
+                y={INNER_H + 26}
+                textAnchor="middle"
+                fontSize={8}
+                fill="#94a3b8"
+              >
+                {step.tool_name ?? step.step_type}
+              </text>
 
-              {/* Tooltip on hover */}
+              {/* Hover tooltip */}
               {isHovered && (
-                <g transform={`translate(0, ${-NODE_R - 24})`}>
+                <g transform={`translate(${x + barW / 2}, ${yScale(tokens) - 32})`}>
                   <rect
-                    x={-100}
-                    y={-36}
-                    width={200}
-                    height={34}
-                    rx={4}
-                    fill="#1e293b"
-                    opacity={0.95}
+                    x={-80} y={-18}
+                    width={160} height={16}
+                    rx={3} fill="#1e293b" opacity={0.92}
                   />
                   <text
-                    y={-22}
-                    textAnchor="middle"
-                    fontSize={10}
-                    fill="#f1f5f9"
-                    fontWeight={600}
+                    textAnchor="middle" y={-7}
+                    fontSize={9} fill="#f1f5f9"
                   >
-                    {step.step_type}{step.tool_name ? `: ${step.tool_name}` : ""}
-                  </text>
-                  <text
-                    y={-10}
-                    textAnchor="middle"
-                    fontSize={9}
-                    fill="#94a3b8"
-                  >
-                    conf: {step.confidence.toFixed(2)} | tokens: {step.token_count ?? "?"}
-                    {mechanism ? ` | ${MECHANISM_LABELS[mechanism as keyof typeof MECHANISM_LABELS]}` : ""}
+                    {step.step_type}{step.tool_name ? `: ${step.tool_name}` : ""} — conf: {step.confidence.toFixed(2)}
                   </text>
                 </g>
               )}
@@ -224,41 +227,19 @@ export function TraceConfidenceTimeline({ steps, diagnoses }: Props) {
           );
         })}
 
-        {/* X axis labels */}
-        {xTicks.map((tick) => (
-          <text
-            key={tick.label}
-            x={tick.x}
-            y={INNER_H + 20}
-            textAnchor="middle"
-            fontSize={10}
-            fill="#94a3b8"
-          >
-            {tick.label}
-          </text>
-        ))}
-
         {/* Legend */}
-        <g transform={`translate(0, ${INNER_H + 35})`}>
-          {(["thought", "action", "observation"] as const).map((type, i) => (
-            <g key={type} transform={`translate(${i * 120}, 0)`}>
-              <g
-                fill={STEP_TYPE_COLORS[type]}
-                stroke={STEP_TYPE_COLORS[type]}
-                strokeWidth={1}
-                opacity={0.7}
-                transform="translate(6,0)"
-              >
-                <StepShape type={type} size={5} />
-              </g>
-              <text x={16} y={4} fontSize={10} fill="#64748b">
-                {type}
-              </text>
-            </g>
-          ))}
-          <text x={380} y={4} fontSize={10} fill="#94a3b8">
-            color = confidence
-          </text>
+        <g transform={`translate(0, ${INNER_H + 36})`}>
+          <rect x={0} y={-5} width={10} height={10} rx={2} fill="#dbeafe" stroke="#93c5fd" strokeWidth={1} />
+          <text x={14} y={4} fontSize={9} fill="#64748b">normal step</text>
+
+          <rect x={100} y={-5} width={10} height={10} rx={2} fill="#fecaca" stroke="#ef4444" strokeWidth={1} />
+          <text x={114} y={4} fontSize={9} fill="#64748b">causal chain step</text>
+
+          <g transform="translate(250, 0)">
+            <rect x={-12} y={-7} width={24} height={14} rx={3} fill="#dc2626" />
+            <text textAnchor="middle" y={4} fontSize={8} fontWeight={700} fill="#fff">B3</text>
+          </g>
+          <text x={270} y={4} fontSize={9} fill="#64748b">root cause</text>
         </g>
       </g>
     </svg>

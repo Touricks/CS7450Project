@@ -198,7 +198,8 @@
       "dietary_preferences": ["seafood-lover", "no-spicy"],
       "budget": "moderate",
       "wishlist_pois": ["Golden Gate Bridge Welcome Center", "Alcatraz Island", "Muir Woods National Monument"],
-      "accessibility_needs": []
+      "accessibility_needs": [],
+      "special_comments": ["Take a rest day after day 3"]
     },
     "daily_schedules": [
       {

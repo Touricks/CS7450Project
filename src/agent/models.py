@@ -39,6 +39,10 @@ class UserProfile(BaseModel):
     budget: Literal["budget", "moderate", "luxury"] = "moderate"
     wishlist_pois: list[str] = Field(default_factory=list)
     accessibility_needs: list[str] = Field(default_factory=list)
+    special_comments: list[str] = Field(
+        default_factory=list,
+        description="Free-text constraints, e.g. 'rest day after day 3'",
+    )
 
 
 class POI(BaseModel):

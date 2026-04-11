@@ -80,6 +80,7 @@ export interface TravelPlan {
     budget: "budget" | "moderate" | "luxury";
     wishlist_pois: string[];
     accessibility_needs: string[];
+    special_comments: string[];
   };
   daily_schedules: DaySchedule[];
   metadata: Record<string, unknown>;

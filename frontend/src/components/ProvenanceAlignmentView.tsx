@@ -1,20 +1,18 @@
 /**
  * View 1: Provenance Alignment View
  *
- * Two-column layout:
- * - Left column: agent's final claims
- * - Right column: ordered trace observations (tool outputs)
- * - Cubic Bezier curves connect claims to supporting observations
+ * Two-column layout for paper figure:
+ * - Left: Agent claims (C1-C7), color-coded green/orange/red
+ * - Right: Merged tool call nodes + thought annotations
+ *   - Tool calls: action+observation merged into single node (e.g. "poi_search")
+ *   - Thoughts: shown as smaller inline annotations between tool calls
+ * - Bezier curves connect claims to their source evidence
+ * - Claims linking only to thoughts = dangling red (fabricated without tool evidence)
  *
- * Color coding:
- * - Green: claim supported by evidence
- * - Orange: data-grounded hallucination (Mechanism A)
- * - Red: model-fabricated hallucination (Mechanism B)
- *
- * React renders all elements. D3 is used only for path generation.
+ * React renders all SVG. D3 computes path geometry only.
  */
 
-import { useMemo, useRef, useState, useEffect, useCallback } from "react";
+import { useMemo, useRef } from "react";
 import type { Claim, TraceStep } from "../types/trace";
 import type { Diagnosis, MechanismType } from "../types/diagnosis";
 import { useSelection } from "../hooks/useSelectionContext";
@@ -27,125 +25,231 @@ interface Props {
   diagnoses: Diagnosis[];
 }
 
-const ROW_HEIGHT = 56;
-const COL_GAP = 160;
+/** A merged tool call: combines action + observation into one node */
+interface ToolCallNode {
+  id: string;           // e.g. "tool-poi_search"
+  toolName: string;
+  actionStep: TraceStep;
+  observationStep: TraceStep;
+  sourceStepIds: number[]; // both action and observation step IDs
+  confidence: number;      // observation's confidence (result quality)
+  tokenCount: number;      // combined tokens
+}
+
+/** A thought step shown as an annotation */
+interface ThoughtNode {
+  id: string;
+  step: TraceStep;
+  contentPreview: string;
+  isFabrication: boolean;  // true if a diagnosed claim links here
+}
+
+/** Union type for right-column entries */
+type RightEntry =
+  | { type: "tool"; data: ToolCallNode; y: number; ordinal: number }
+  | { type: "thought"; data: ThoughtNode; y: number; ordinal: number };
+
+const TOOL_ROW_HEIGHT = 62;
+const THOUGHT_ROW_HEIGHT = 40;
+const CLAIM_ROW_HEIGHT = 56;
+const COL_GAP = 140;
 const LEFT_WIDTH = 280;
-const RIGHT_WIDTH = 280;
-const SVG_PADDING = 16;
+const RIGHT_WIDTH = 300;
+const SVG_PADDING = 20;
 
 export function ProvenanceAlignmentView({ claims, steps, diagnoses }: Props) {
   const { selectedClaimId, selectClaim, selectDiagnosis } = useSelection();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [claimPositions, setClaimPositions] = useState<Map<string, number>>(new Map());
-  const [stepPositions, setStepPositions] = useState<Map<number, number>>(new Map());
 
   // Build lookup maps
   const diagnosedClaimIds = useMemo(
     () => new Set(diagnoses.map((d) => d.claim.claim_id)),
     [diagnoses]
   );
-
   const mechanismMap = useMemo(
     () => new Map<string, MechanismType>(diagnoses.map((d) => [d.claim.claim_id, d.mechanism])),
     [diagnoses]
   );
-
   const diagnosisByClaimId = useMemo(
     () => new Map(diagnoses.map((d) => [d.claim.claim_id, d])),
     [diagnoses]
   );
 
-  // Filter to observation steps (the right column shows tool observations)
-  const observationSteps = useMemo(
-    () => steps.filter((s) => s.step_type === "observation" || s.step_type === "action"),
-    [steps]
-  );
+  // Step IDs that diagnosed claims reference (to detect fabrication thoughts)
+  const diagnosedSourceSteps = useMemo(() => {
+    const ids = new Set<number>();
+    for (const d of diagnoses) {
+      const claim = claims.find((c) => c.claim_id === d.claim.claim_id);
+      if (claim) claim.source_step_ids.forEach((id) => ids.add(id));
+    }
+    return ids;
+  }, [diagnoses, claims]);
 
-  // Compute fixed positions for claims and steps
-  const measurePositions = useCallback(() => {
-    const newClaimPos = new Map<string, number>();
+  // ── Build right-column entries ──
+  const rightEntries = useMemo(() => {
+    const entries: RightEntry[] = [];
+    let y = SVG_PADDING;
+    let ordinal = 1;
+
+    // Group steps by their role
+    const actionMap = new Map<string, TraceStep>(); // tool_name → action step
+    const obsMap = new Map<string, TraceStep>();    // tool_name → observation step
+    const thoughts: TraceStep[] = [];
+
+    for (const step of steps) {
+      if (step.step_type === "thought") {
+        thoughts.push(step);
+      } else if (step.step_type === "action" && step.tool_name) {
+        actionMap.set(step.tool_name, step);
+      } else if (step.step_type === "observation" && step.tool_name) {
+        obsMap.set(step.tool_name, step);
+      }
+    }
+
+    // Interleave: thought → tool call → thought → tool call...
+    // Walk through steps in order, emit thoughts and merged tool calls
+    let i = 0;
+    while (i < steps.length) {
+      const step = steps[i];
+
+      if (step.step_type === "thought") {
+        const isFab = diagnosedSourceSteps.has(step.step_id);
+        entries.push({
+          type: "thought",
+          data: {
+            id: `thought-${step.step_id}`,
+            step,
+            contentPreview: step.content.slice(0, 60) + (step.content.length > 60 ? "…" : ""),
+            isFabrication: isFab,
+          },
+          y,
+          ordinal: ordinal++,
+        });
+        y += THOUGHT_ROW_HEIGHT;
+        i++;
+      } else if (step.step_type === "action" && step.tool_name) {
+        // Look ahead for the observation
+        const obsStep = i + 1 < steps.length && steps[i + 1].step_type === "observation"
+          ? steps[i + 1]
+          : null;
+
+        entries.push({
+          type: "tool",
+          data: {
+            id: `tool-${step.tool_name}`,
+            toolName: step.tool_name,
+            actionStep: step,
+            observationStep: obsStep ?? step,
+            sourceStepIds: obsStep ? [step.step_id, obsStep.step_id] : [step.step_id],
+            confidence: obsStep ? obsStep.confidence : step.confidence,
+            tokenCount: (step.token_count ?? 0) + (obsStep?.token_count ?? 0),
+          },
+          y,
+          ordinal: ordinal++,
+        });
+        y += TOOL_ROW_HEIGHT;
+        i += obsStep ? 2 : 1; // skip the observation
+      } else {
+        i++;
+      }
+    }
+
+    return entries;
+  }, [steps, diagnosedSourceSteps]);
+
+  // ── Build step ID → Y position map (for Bezier targets) ──
+  const stepYMap = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const entry of rightEntries) {
+      const centerY = entry.type === "tool"
+        ? entry.y + TOOL_ROW_HEIGHT / 2
+        : entry.y + THOUGHT_ROW_HEIGHT / 2;
+
+      if (entry.type === "tool") {
+        for (const sid of entry.data.sourceStepIds) {
+          map.set(sid, centerY);
+        }
+      } else {
+        map.set(entry.data.step.step_id, centerY);
+      }
+    }
+    return map;
+  }, [rightEntries]);
+
+  // ── Claim Y positions ──
+  const claimYMap = useMemo(() => {
+    const map = new Map<string, number>();
     claims.forEach((c, i) => {
-      newClaimPos.set(c.claim_id, SVG_PADDING + i * ROW_HEIGHT + ROW_HEIGHT / 2);
+      map.set(c.claim_id, SVG_PADDING + i * CLAIM_ROW_HEIGHT + CLAIM_ROW_HEIGHT / 2);
     });
-    setClaimPositions(newClaimPos);
+    return map;
+  }, [claims]);
 
-    const newStepPos = new Map<number, number>();
-    observationSteps.forEach((s, i) => {
-      newStepPos.set(s.step_id, SVG_PADDING + i * ROW_HEIGHT + ROW_HEIGHT / 2);
-    });
-    setStepPositions(newStepPos);
-  }, [claims, observationSteps]);
-
-  useEffect(() => {
-    measurePositions();
-  }, [measurePositions]);
-
-  // Compute Bezier links
+  // ── Bezier links ──
   const links = useMemo(() => {
-    const result: {
-      path: string;
-      claimId: string;
-      stepId: number;
-      color: string;
-    }[] = [];
-
+    const result: { path: string; claimId: string; color: string }[] = [];
     const leftX = LEFT_WIDTH;
     const rightX = LEFT_WIDTH + COL_GAP;
 
     for (const claim of claims) {
-      const claimY = claimPositions.get(claim.claim_id);
+      const claimY = claimYMap.get(claim.claim_id);
       if (claimY === undefined) continue;
 
       const color = getClaimColor(claim.claim_id, diagnosedClaimIds, mechanismMap);
+      let hasLink = false;
 
       for (const stepId of claim.source_step_ids) {
-        const stepY = stepPositions.get(stepId);
+        const stepY = stepYMap.get(stepId);
         if (stepY === undefined) continue;
-
         result.push({
           path: cubicBezierPath(leftX, claimY, rightX, stepY),
           claimId: claim.claim_id,
-          stepId,
           color,
         });
+        hasLink = true;
       }
 
-      // Claims with no source steps get a dangling indicator
-      if (claim.source_step_ids.length === 0) {
+      // Dangling claim — no source found in visible entries
+      if (!hasLink) {
         result.push({
-          path: cubicBezierPath(leftX, claimY, leftX + COL_GAP / 2, claimY),
+          path: cubicBezierPath(leftX, claimY, leftX + COL_GAP * 0.6, claimY),
           claimId: claim.claim_id,
-          stepId: -1,
           color: "#ef4444",
         });
       }
     }
-
     return result;
-  }, [claims, claimPositions, stepPositions, diagnosedClaimIds, mechanismMap]);
+  }, [claims, claimYMap, stepYMap, diagnosedClaimIds, mechanismMap]);
 
-  const totalHeight = Math.max(
-    SVG_PADDING * 2 + claims.length * ROW_HEIGHT,
-    SVG_PADDING * 2 + observationSteps.length * ROW_HEIGHT,
-    200
-  );
-
+  // ── Dimensions ──
+  const rightHeight = rightEntries.length > 0
+    ? rightEntries[rightEntries.length - 1].y +
+      (rightEntries[rightEntries.length - 1].type === "tool" ? TOOL_ROW_HEIGHT : THOUGHT_ROW_HEIGHT)
+    : 200;
+  const leftHeight = SVG_PADDING * 2 + claims.length * CLAIM_ROW_HEIGHT;
+  const totalHeight = Math.max(rightHeight + SVG_PADDING, leftHeight, 200);
   const totalWidth = LEFT_WIDTH + COL_GAP + RIGHT_WIDTH;
 
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
       <svg
-        width={totalWidth}
-        height={totalHeight}
-        style={{ maxWidth: "100%", height: "auto" }}
+        viewBox={`0 0 ${totalWidth} ${totalHeight}`}
+        style={{ width: "100%", height: "auto" }}
       >
-        {/* Bezier curves (render behind everything) */}
+        {/* Column headers */}
+        <text x={LEFT_WIDTH / 2} y={12} textAnchor="middle" fontSize={11} fontWeight={600} fill="#64748b">
+          Agent Claims
+        </text>
+        <text x={LEFT_WIDTH + COL_GAP + RIGHT_WIDTH / 2} y={12} textAnchor="middle" fontSize={11} fontWeight={600} fill="#64748b">
+          Evidence Sources
+        </text>
+
+        {/* ── Bezier curves ── */}
         <g>
           {links.map((link, i) => {
             const isSelected = selectedClaimId === link.claimId;
             return (
               <g key={`link-${i}`}>
-                {/* Invisible thick hit-test path */}
                 <path
                   d={link.path}
                   fill="none"
@@ -158,15 +262,12 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses }: Props) {
                     if (diag) selectDiagnosis(diag.diagnosis_id, diag.causal_chain);
                   }}
                 />
-                {/* Visible path */}
                 <path
                   d={link.path}
                   fill="none"
                   stroke={link.color}
                   strokeWidth={isSelected ? 3 : 1.5}
-                  strokeOpacity={
-                    selectedClaimId === null || isSelected ? 0.7 : 0.15
-                  }
+                  strokeOpacity={selectedClaimId === null || isSelected ? 0.7 : 0.12}
                   style={{ transition: "stroke-opacity 0.2s, stroke-width 0.2s" }}
                 />
               </g>
@@ -174,10 +275,10 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses }: Props) {
           })}
         </g>
 
-        {/* Left column: Claims */}
+        {/* ── Left column: Claims ── */}
         <g>
           {claims.map((claim, i) => {
-            const y = SVG_PADDING + i * ROW_HEIGHT;
+            const y = SVG_PADDING + i * CLAIM_ROW_HEIGHT;
             const color = getClaimColor(claim.claim_id, diagnosedClaimIds, mechanismMap);
             const isSelected = selectedClaimId === claim.claim_id;
 
@@ -192,59 +293,22 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses }: Props) {
                   if (diag) selectDiagnosis(diag.diagnosis_id, diag.causal_chain);
                 }}
               >
-                {/* Background */}
                 <rect
-                  x={4}
-                  y={2}
-                  width={LEFT_WIDTH - 8}
-                  height={ROW_HEIGHT - 4}
+                  x={4} y={2}
+                  width={LEFT_WIDTH - 8} height={CLAIM_ROW_HEIGHT - 4}
                   rx={6}
                   fill={isSelected ? "#f0f9ff" : "#fafafa"}
                   stroke={isSelected ? "#3b82f6" : "#e2e8f0"}
                   strokeWidth={isSelected ? 2 : 1}
                 />
-
-                {/* Color indicator bar */}
-                <rect
-                  x={4}
-                  y={2}
-                  width={4}
-                  height={ROW_HEIGHT - 4}
-                  rx={2}
-                  fill={color}
-                />
-
-                {/* Claim ID */}
-                <text
-                  x={16}
-                  y={18}
-                  fontSize={10}
-                  fontWeight={700}
-                  fill={color}
-                >
+                <rect x={4} y={2} width={4} height={CLAIM_ROW_HEIGHT - 4} rx={2} fill={color} />
+                <text x={16} y={18} fontSize={10} fontWeight={700} fill={color}>
                   {claim.claim_id.toUpperCase()}
                 </text>
-
-                {/* Claim text (truncated) */}
-                <text
-                  x={16}
-                  y={34}
-                  fontSize={11}
-                  fill="#334155"
-                  style={{ fontFamily: "Inter, system-ui, sans-serif" }}
-                >
-                  {claim.text.length > 38
-                    ? claim.text.slice(0, 38) + "…"
-                    : claim.text}
+                <text x={16} y={34} fontSize={11} fill="#334155">
+                  {claim.text.length > 36 ? claim.text.slice(0, 36) + "…" : claim.text}
                 </text>
-
-                {/* Claim type tag */}
-                <text
-                  x={16}
-                  y={48}
-                  fontSize={9}
-                  fill="#94a3b8"
-                >
+                <text x={16} y={48} fontSize={9} fill="#94a3b8">
                   {claim.claim_type}
                 </text>
               </g>
@@ -252,88 +316,90 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses }: Props) {
           })}
         </g>
 
-        {/* Right column: Trace observations */}
+        {/* ── Right column: Tool calls + Thought annotations ── */}
         <g transform={`translate(${LEFT_WIDTH + COL_GAP}, 0)`}>
-          {observationSteps.map((step, i) => {
-            const y = SVG_PADDING + i * ROW_HEIGHT;
-            const isHighlighted =
-              selectedClaimId !== null &&
-              claims.some(
-                (c) =>
-                  c.claim_id === selectedClaimId &&
-                  c.source_step_ids.includes(step.step_id)
+          {rightEntries.map((entry) => {
+            if (entry.type === "tool") {
+              const { data, y } = entry;
+              const isHighlighted =
+                selectedClaimId !== null &&
+                claims.some(
+                  (c) =>
+                    c.claim_id === selectedClaimId &&
+                    c.source_step_ids.some((sid) => data.sourceStepIds.includes(sid))
+                );
+
+              return (
+                <g key={data.id} transform={`translate(0, ${y})`}>
+                  <rect
+                    x={4} y={2}
+                    width={RIGHT_WIDTH - 8} height={TOOL_ROW_HEIGHT - 4}
+                    rx={6}
+                    fill={isHighlighted ? "#f0fdf4" : "#fafafa"}
+                    stroke={isHighlighted ? "#22c55e" : "#e2e8f0"}
+                    strokeWidth={isHighlighted ? 2 : 1}
+                  />
+                  {/* Ordinal badge */}
+                  <circle cx={22} cy={18} r={10} fill="#6366f1" opacity={0.12} />
+                  <text x={22} y={22} textAnchor="middle" fontSize={10} fontWeight={700} fill="#6366f1">
+                    {entry.ordinal}
+                  </text>
+                  {/* Tool name */}
+                  <text x={38} y={22} fontSize={12} fontWeight={700} fill="#6366f1">
+                    {data.toolName}
+                  </text>
+                  {/* Metadata row */}
+                  <text x={14} y={42} fontSize={10} fill="#64748b">
+                    conf: {data.confidence.toFixed(2)}
+                  </text>
+                  <text x={100} y={42} fontSize={10} fill="#94a3b8">
+                    {data.tokenCount} tokens
+                  </text>
+                </g>
               );
-
-            return (
-              <g key={step.step_id} transform={`translate(0, ${y})`}>
-                {/* Background */}
-                <rect
-                  x={4}
-                  y={2}
-                  width={RIGHT_WIDTH - 8}
-                  height={ROW_HEIGHT - 4}
-                  rx={6}
-                  fill={isHighlighted ? "#f0fdf4" : "#fafafa"}
-                  stroke={isHighlighted ? "#22c55e" : "#e2e8f0"}
-                  strokeWidth={isHighlighted ? 2 : 1}
-                />
-
-                {/* Step type indicator */}
-                <text
-                  x={14}
-                  y={18}
-                  fontSize={10}
-                  fontWeight={700}
-                  fill="#6366f1"
-                >
-                  S{step.step_id} [{step.step_type}]
-                </text>
-
-                {/* Tool name or content preview */}
-                <text
-                  x={14}
-                  y={34}
-                  fontSize={11}
-                  fill="#334155"
-                >
-                  {step.tool_name
-                    ? `🔧 ${step.tool_name}`
-                    : step.content.slice(0, 35) + (step.content.length > 35 ? "…" : "")}
-                </text>
-
-                {/* Confidence */}
-                <text
-                  x={14}
-                  y={48}
-                  fontSize={9}
-                  fill="#94a3b8"
-                >
-                  conf: {step.confidence.toFixed(2)}
-                </text>
-              </g>
-            );
+            } else {
+              // Thought annotation
+              const { data, y } = entry;
+              const thoughtColor = data.isFabrication ? "#dc2626" : "#94a3b8";
+              return (
+                <g key={data.id} transform={`translate(0, ${y})`}>
+                  <rect
+                    x={8} y={4}
+                    width={RIGHT_WIDTH - 16} height={THOUGHT_ROW_HEIGHT - 8}
+                    rx={4}
+                    fill={data.isFabrication ? "#fef2f2" : "#f8fafc"}
+                    stroke={data.isFabrication ? "#fca5a5" : "#f1f5f9"}
+                    strokeWidth={1}
+                    strokeDasharray={data.isFabrication ? "none" : "4,2"}
+                  />
+                  {/* Ordinal badge */}
+                  <circle cx={20} cy={20} r={7} fill={thoughtColor} opacity={0.12} />
+                  <text x={20} y={23} textAnchor="middle" fontSize={8} fontWeight={600} fill={thoughtColor}>
+                    {entry.ordinal}
+                  </text>
+                  {/* Fabrication warning */}
+                  {data.isFabrication && (
+                    <text x={32} y={24} fontSize={10} fill="#dc2626">&#9888;</text>
+                  )}
+                  {/* Content preview */}
+                  <text
+                    x={data.isFabrication ? 44 : 32} y={24}
+                    fontSize={9}
+                    fontStyle="italic"
+                    fill={thoughtColor}
+                    fontWeight={data.isFabrication ? 600 : 400}
+                  >
+                    {data.contentPreview.slice(0, 42)}{data.contentPreview.length > 42 ? "…" : ""}
+                  </text>
+                </g>
+              );
+            }
           })}
         </g>
-
-        {/* Column headers */}
-        <text x={LEFT_WIDTH / 2} y={10} textAnchor="middle" fontSize={11} fontWeight={600} fill="#64748b">
-          Agent Claims
-        </text>
-        <text x={LEFT_WIDTH + COL_GAP + RIGHT_WIDTH / 2} y={10} textAnchor="middle" fontSize={11} fontWeight={600} fill="#64748b">
-          Trace Observations
-        </text>
       </svg>
 
       {/* Legend */}
-      <div
-        style={{
-          display: "flex",
-          gap: "16px",
-          marginTop: "8px",
-          fontSize: "11px",
-          color: "#64748b",
-        }}
-      >
+      <div style={{ display: "flex", gap: "16px", marginTop: "8px", fontSize: "11px", color: "#64748b" }}>
         <span>
           <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 2, background: "#22c55e", marginRight: 4, verticalAlign: "middle" }} />
           Supported
@@ -345,6 +411,14 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses }: Props) {
         <span>
           <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 2, background: "#ef4444", marginRight: 4, verticalAlign: "middle" }} />
           Model-Fabricated (B)
+        </span>
+        <span style={{ marginLeft: "8px", borderLeft: "1px solid #e2e8f0", paddingLeft: "12px" }}>
+          <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 2, background: "#6366f1", marginRight: 4, verticalAlign: "middle" }} />
+          Tool call
+        </span>
+        <span>
+          <span style={{ display: "inline-block", width: 12, height: 3, background: "#fca5a5", marginRight: 4, verticalAlign: "middle" }} />
+          Agent reasoning
         </span>
       </div>
     </div>
