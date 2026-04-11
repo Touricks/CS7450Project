@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Environment
+.env
+
+# Sentinel
+.sentinel/tmp/
+
+# IDE
+.DS_Store
+.vscode/
+
+# Experiment artifacts (large files)
+experiments/**/outputs/*.csv
+experiments/**/outputs/*.parquet
+experiments/**/outputs/*.jsonl
+experiments/**/*.pkl
+experiments/**/*.pt
+experiments/**/*.bin
+
+# Build
+uv.lock
+
+# Playwright MCP artifacts
+.playwright-mcp/
+
+# Test screenshots (local only)
+test/screenshots/
+
+# Compaction state
+.compaction-state.json
