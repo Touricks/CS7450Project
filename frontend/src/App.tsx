@@ -2,7 +2,6 @@ import { useTraceData } from "./hooks/useTraceData";
 import { SelectionProvider } from "./hooks/useSelectionContext";
 import { Layout } from "./components/Layout";
 import { ProvenanceAlignmentView } from "./components/ProvenanceAlignmentView";
-import { ConflictGraphView } from "./components/ConflictGraphView";
 import { DiagnosticSummaryPanel } from "./components/DiagnosticSummaryPanel";
 
 function AppContent() {
@@ -37,16 +36,8 @@ function AppContent() {
           claims={trace.claims}
           steps={trace.steps}
           diagnoses={diagnoses}
+          plan={trace.plan}
         />
-      }
-      conflictView={
-        trace.plan ? (
-          <ConflictGraphView plan={trace.plan} diagnoses={diagnoses} />
-        ) : (
-          <div style={{ color: "#94a3b8", textAlign: "center", padding: "40px" }}>
-            No travel plan available
-          </div>
-        )
       }
       summaryPanel={
         <DiagnosticSummaryPanel diagnoses={diagnoses} />

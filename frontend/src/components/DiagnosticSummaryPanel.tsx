@@ -24,7 +24,7 @@ interface Props {
 
 const SEVERITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
-function EmptyState({ diagnoses }: { diagnoses: Diagnosis[] }) {
+function EmptyState({ diagnoses, onViewIssues }: { diagnoses: Diagnosis[]; onViewIssues: () => void }) {
   const counts = useMemo(() => {
     const c = { high: 0, medium: 0, low: 0 };
     for (const d of diagnoses) c[d.severity]++;
@@ -83,9 +83,25 @@ function EmptyState({ diagnoses }: { diagnoses: Diagnosis[] }) {
         </div>
       </div>
 
+      {/* View Issues button */}
+      <button
+        onClick={onViewIssues}
+        style={{
+          fontSize: "13px", fontWeight: 600,
+          color: "#fff", background: "#ef4444",
+          border: "none", borderRadius: "6px",
+          padding: "8px 20px", cursor: "pointer",
+          transition: "background 0.15s",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "#dc2626")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "#ef4444")}
+      >
+        View Issues
+      </button>
+
       {/* Prompt */}
-      <div style={{ fontSize: "13px", color: "#94a3b8", textAlign: "center", lineHeight: 1.5 }}>
-        Select a highlighted claim to view<br />diagnosis details
+      <div style={{ fontSize: "12px", color: "#94a3b8", textAlign: "center", lineHeight: 1.5 }}>
+        or select a schedule item<br />to jump to a specific diagnosis
       </div>
     </div>
   );
@@ -177,7 +193,13 @@ export function DiagnosticSummaryPanel({ diagnoses }: Props) {
 
   // No selection → empty state
   if (!activeDiag) {
-    return <EmptyState diagnoses={diagnoses} />;
+    function handleViewIssues() {
+      const first = sorted[0];
+      if (!first) return;
+      selectDiagnosis(first.diagnosis_id, first.causal_chain);
+      selectClaim(first.claim.claim_id);
+    }
+    return <EmptyState diagnoses={diagnoses} onViewIssues={handleViewIssues} />;
   }
 
   return (
