@@ -16,12 +16,12 @@
  * React renders all SVG. D3 computes path geometry only.
  */
 
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useId } from "react";
 import type { Claim, TraceStep, TravelPlan, ScheduleEntry } from "../types/trace";
 import type { Diagnosis } from "../types/diagnosis";
 import { useSelection } from "../hooks/useSelectionContext";
 import { cubicBezierPath } from "../lib/bezier";
-import { getClaimColor } from "../lib/colors";
+import { getClaimColor, PROVENANCE_COLORS } from "../lib/colors";
 import { detectConflicts } from "../lib/conflictDetection";
 
 interface Props {
@@ -78,56 +78,10 @@ const ENTRY_INDENT = 0;
 const INTER_DAY_GAP = 10;
 
 const PR_H = 40;
-const PR_GAP = 0;  // profile nodes are horizontal — no vertical gap needed
 const PM_H = 40;          // matches ConflictGraphView NODE_HEIGHT
 const PM_GAP = 6;
-
-// ── SVG icon helpers for schedule nodes ──
-function CalendarIcon({ cx, cy, color }: { cx: number; cy: number; color: string }) {
-  return (
-    <>
-      <rect x={cx - 9} y={cy - 8} width={18} height={16} rx={2} fill="none" stroke={color} strokeWidth={1.5} />
-      <line x1={cx - 9} y1={cy - 3} x2={cx + 9} y2={cy - 3} stroke={color} strokeWidth={1} />
-      <line x1={cx - 3} y1={cy - 11} x2={cx - 3} y2={cy - 8} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
-      <line x1={cx + 3} y1={cy - 11} x2={cx + 3} y2={cy - 8} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
-      <circle cx={cx - 4} cy={cy + 4} r={1.5} fill={color} />
-      <circle cx={cx} cy={cy + 4} r={1.5} fill={color} />
-      <circle cx={cx + 4} cy={cy + 4} r={1.5} fill={color} />
-    </>
-  );
-}
-function LocationIcon({ cx, cy, color }: { cx: number; cy: number; color: string }) {
-  return (
-    <>
-      <circle cx={cx} cy={cy - 3} r={6} fill="none" stroke={color} strokeWidth={1.5} />
-      <circle cx={cx} cy={cy - 3} r={2} fill={color} />
-      <line x1={cx} y1={cy + 3} x2={cx} y2={cy + 8} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
-    </>
-  );
-}
-function ForkIcon({ cx, cy, color }: { cx: number; cy: number; color: string }) {
-  return (
-    <>
-      <line x1={cx - 4} y1={cy - 9} x2={cx - 4} y2={cy + 9} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
-      <path d={`M${cx - 6},${cy - 9} a6,5 0 0 1 12,0`} fill="none" stroke={color} strokeWidth={1.5} />
-      <line x1={cx + 4} y1={cy - 9} x2={cx + 4} y2={cy + 9} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
-    </>
-  );
-}
-function ClockIcon({ cx, cy, color }: { cx: number; cy: number; color: string }) {
-  return (
-    <>
-      <circle cx={cx} cy={cy} r={9} fill="none" stroke={color} strokeWidth={1.5} />
-      <line x1={cx} y1={cy} x2={cx} y2={cy - 5} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
-      <line x1={cx} y1={cy} x2={cx + 4} y2={cy + 2} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
-    </>
-  );
-}
-function CategoryIcon({ category, cx, cy, color }: { category: string; cx: number; cy: number; color: string }) {
-  if (category === "restaurant") return <ForkIcon cx={cx} cy={cy} color={color} />;
-  if (category === "nature" || category === "landmark" || category === "attraction") return <LocationIcon cx={cx} cy={cy} color={color} />;
-  return <ClockIcon cx={cx} cy={cy} color={color} />;
-}
+const DETAIL_POPOVER_W = 280;
+const DETAIL_POPOVER_H = 136;
 
 // ── ID helpers ──
 function dayNodeId(day: number): string {
@@ -135,6 +89,9 @@ function dayNodeId(day: number): string {
 }
 function schedEntryId(entry: ScheduleEntry): string {
   return `s${entry.day}-${entry.poi.name.replace(/[^a-z0-9]/gi, "-").toLowerCase().slice(0, 20)}`;
+}
+function conflictSchedEntryId(entry: ScheduleEntry): string {
+  return `schedule-day${entry.day}-${entry.poi.name.replace(/\s+/g, "-").toLowerCase()}`;
 }
 function trunc(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + "\u2026" : s;
@@ -144,15 +101,21 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
   const { selectedClaimId, selectClaim, selectDiagnosis, clearSelection } = useSelection();
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<number>>(new Set());
+  const [expandedNode, setExpandedNode] = useState<{
+    id: string;
+    title: string;
+    subtitle: string;
+    detail: string;
+    accent: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const skipNextClaimEffect = useRef(false);
+  const markerSeed = useId().replace(/:/g, "");
 
   // ── Diagnosis lookups ──
   const diagnosedClaimIds = useMemo(
     () => new Set(diagnoses.map((d) => d.claim.claim_id)),
-    [diagnoses]
-  );
-  const mechanismMap = useMemo(
-    () => new Map<string, string>(diagnoses.map((d) => [d.claim.claim_id, d.mechanism])),
     [diagnoses]
   );
   const diagByClaim = useMemo(
@@ -174,6 +137,44 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
     () => dayGroups.flatMap((dg) => dg.entries),
     [dayGroups]
   );
+  const dayInfoByNum = useMemo(
+    () => new Map(dayGroups.map((dg) => [dg.day, dg])),
+    [dayGroups]
+  );
+  const conflictGraph = useMemo(
+    () => (plan ? detectConflicts(plan) : { nodes: [], edges: [] }),
+    [plan]
+  );
+  const conflictScheduleEntryToOurId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entry of allEntries) {
+      map.set(conflictSchedEntryId(entry), schedEntryId(entry));
+    }
+    return map;
+  }, [allEntries]);
+  const conflictScheduleEntryIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const edge of conflictGraph.edges) {
+      const endpoints = [edge.source, edge.target];
+      for (const endpoint of endpoints) {
+        if (!endpoint.startsWith("schedule-day") || /^schedule-day\d+$/.test(endpoint)) continue;
+        const ourId = conflictScheduleEntryToOurId.get(endpoint);
+        if (ourId) ids.add(ourId);
+      }
+    }
+    return ids;
+  }, [conflictGraph, conflictScheduleEntryToOurId]);
+  const conflictDayIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const edge of conflictGraph.edges) {
+      const endpoints = [edge.source, edge.target];
+      for (const endpoint of endpoints) {
+        const m = endpoint.match(/^schedule-day(\d+)$/);
+        if (m) ids.add(Number(m[1]));
+      }
+    }
+    return ids;
+  }, [conflictGraph]);
 
   // ── Schedule→Claims mapping ──
   // Day-level claims (c4 pattern: entities.day but no poi_name) → day summary node
@@ -238,6 +239,29 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
     }
     return map;
   }, [scheduleToClaimsMap]);
+  const conflictDerivedClaimIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const [claimId, scheduleIds] of claimToScheduleMap) {
+      if (scheduleIds.some((sid) => conflictScheduleEntryIds.has(sid) || conflictDayIds.has(Number(sid.replace("day-", ""))))) {
+        ids.add(claimId);
+      }
+    }
+    return ids;
+  }, [claimToScheduleMap, conflictScheduleEntryIds, conflictDayIds]);
+  const claimColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const claim of claims) {
+      const cid = claim.claim_id;
+      if (diagnosedClaimIds.has(cid)) {
+        map.set(cid, getClaimColor(cid, diagnosedClaimIds));
+      } else if (conflictDerivedClaimIds.has(cid)) {
+        map.set(cid, PROVENANCE_COLORS.fabricated);
+      } else {
+        map.set(cid, PROVENANCE_COLORS.supported);
+      }
+    }
+    return map;
+  }, [claims, diagnosedClaimIds, conflictDerivedClaimIds]);
 
   // ── Individual entry error: entry-specific issues only (not day-level c4) ──
   const isEntryError = useMemo(() => {
@@ -249,10 +273,11 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
         e.notes.includes("HALLUCINATION") ||
         e.notes.toLowerCase().includes("exceeds");
       const hasDiag = linked.some((cid) => diagnosedClaimIds.has(cid));
-      map.set(id, hasNote || hasDiag);
+      const hasConflict = conflictScheduleEntryIds.has(id);
+      map.set(id, hasNote || hasDiag || hasConflict);
     }
     return map;
-  }, [allEntries, scheduleToClaimsMap, diagnosedClaimIds]);
+  }, [allEntries, scheduleToClaimsMap, diagnosedClaimIds, conflictScheduleEntryIds]);
 
   // ── Which entries are "flagged" (have claims or notes issues) ──
   const shouldShowEntry = useMemo(() => {
@@ -263,10 +288,11 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
       const hasNote =
         e.notes.includes("HALLUCINATION") ||
         e.notes.toLowerCase().includes("exceeds");
-      map.set(id, linked.length > 0 || hasNote);
+      const hasConflict = conflictScheduleEntryIds.has(id);
+      map.set(id, linked.length > 0 || hasNote || hasConflict);
     }
     return map;
-  }, [allEntries, scheduleToClaimsMap]);
+  }, [allEntries, scheduleToClaimsMap, conflictScheduleEntryIds]);
 
   // ── Day error: red if ANY entry is flagged OR day has diagnosed day-level claims ──
   const isDayError = useMemo(() => {
@@ -274,13 +300,14 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
     for (const dg of dayGroups) {
       const dayLinked = scheduleToClaimsMap.get(dayNodeId(dg.day)) ?? [];
       const hasDayDiag = dayLinked.some((cid) => diagnosedClaimIds.has(cid));
+      const hasDayConflict = conflictDayIds.has(dg.day);
       const hasEntryIssue = dg.entries.some(
         (e) => isEntryError.get(schedEntryId(e)) || shouldShowEntry.get(schedEntryId(e))
       );
-      map.set(dg.day, hasDayDiag || hasEntryIssue);
+      map.set(dg.day, hasDayDiag || hasDayConflict || hasEntryIssue);
     }
     return map;
-  }, [dayGroups, scheduleToClaimsMap, diagnosedClaimIds, isEntryError, shouldShowEntry]);
+  }, [dayGroups, scheduleToClaimsMap, diagnosedClaimIds, isEntryError, shouldShowEntry, conflictDayIds]);
 
   type SchedNode =
     | { kind: "day"; id: string; day: number; count: number; isError: boolean }
@@ -332,6 +359,16 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
     () => claims.filter((c) => visibleClaimIds.has(c.claim_id)),
     [claims, visibleClaimIds]
   );
+  const claimArrowMarkerByColor = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const claim of visibleClaims) {
+      const color = claimColorMap.get(claim.claim_id) ?? PROVENANCE_COLORS.supported;
+      if (!map.has(color)) {
+        map.set(color, `${markerSeed}-arrow-claim-sched-${map.size}`);
+      }
+    }
+    return map;
+  }, [visibleClaims, claimColorMap, markerSeed]);
 
   // ── Evidence nodes ──
   const evidenceNodes = useMemo(() => {
@@ -340,6 +377,7 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
       type: "tool" | "thought";
       label: string;
       detail: string;
+      fullDetail: string;
       stepIds: number[];
     };
     const nodes: ENode[] = [];
@@ -352,6 +390,7 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
           type: "thought",
           label: "Thought",
           detail: trunc(s.content, 52),
+          fullDetail: s.content,
           stepIds: [s.step_id],
         });
         i++;
@@ -365,6 +404,7 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
           type: "tool",
           label: s.tool_name,
           detail: `conf: ${(obs ?? s).confidence.toFixed(2)}`,
+          fullDetail: obs?.content ?? s.content,
           stepIds: obs ? [s.step_id, obs.step_id] : [s.step_id],
         });
         i += obs ? 2 : 1;
@@ -391,6 +431,17 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
       nodes.push({ id: "prof-comment", label: "Comment", detail: trunc(p.special_comments[0], 26) });
     }
     return nodes;
+  }, [plan]);
+  const profileDetailById = useMemo(() => {
+    if (!plan) return new Map<string, string>();
+    const p = plan.user_profile;
+    return new Map<string, string>([
+      ["prof-pace", `Travel pace: ${p.travel_pace}`],
+      ["prof-interests", `Interests: ${p.interests.join(", ") || "None"}`],
+      ["prof-dietary", `Dietary: ${p.dietary_preferences.join(", ") || "None"}`],
+      ["prof-wishlist", `Wishlist POIs: ${p.wishlist_pois.join(", ") || "None"}`],
+      ["prof-comment", `Special comments: ${p.special_comments.join(" | ") || "None"}`],
+    ]);
   }, [plan]);
 
   // ── Schedule → Profile mapping ──
@@ -497,9 +548,6 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
     return map;
   }, [profileNodes]);
 
-  // ── Conflict graph: POI metadata nodes from detectConflicts ──
-  const conflictGraph = useMemo(() => detectConflicts(plan), [plan]);
-
   const poiMetaNodes = useMemo(
     () => conflictGraph.nodes.filter((n) => n.class === "poi"),
     [conflictGraph]
@@ -515,22 +563,22 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
     return map;
   }, [poiMetaNodes]);
 
-  // Map our schedEntryId → conflict POI node id (via hours_mismatch edges)
+  // Map our schedEntryId → conflict POI node id (via schedule↔poi conflict edges)
   const ourEntryToConflictPOI = useMemo(() => {
     const map = new Map<string, string>();
-    const poiById = new Map(poiMetaNodes.map((n) => [n.id, n]));
+    const poiIds = new Set(poiMetaNodes.map((n) => n.id));
     for (const edge of conflictGraph.edges) {
-      if (edge.type !== "hours_mismatch") continue;
-      const poiNode = poiById.get(edge.source);
-      if (!poiNode) continue;
-      for (const e of allEntries) {
-        if (e.poi.name === poiNode.label) {
-          map.set(schedEntryId(e), poiNode.id);
-        }
-      }
+      const endpoints = [edge.source, edge.target];
+      const scheduleEndpoint = endpoints.find(
+        (id) => id.startsWith("schedule-day") && !/^schedule-day\d+$/.test(id)
+      );
+      const poiEndpoint = endpoints.find((id) => poiIds.has(id));
+      if (!scheduleEndpoint || !poiEndpoint) continue;
+      const ourId = conflictScheduleEntryToOurId.get(scheduleEndpoint);
+      if (ourId) map.set(ourId, poiEndpoint);
     }
     return map;
-  }, [conflictGraph, poiMetaNodes, allEntries]);
+  }, [conflictGraph, poiMetaNodes, conflictScheduleEntryToOurId]);
 
   // ── Highlight state ──
   const highlighted = useMemo(() => {
@@ -553,6 +601,24 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
       poiMetaId: ourEntryToConflictPOI.get(selectedScheduleId) ?? null,
     };
   }, [selectedScheduleId, scheduleToClaimsMap, scheduleToProfileMap, claims, evidenceNodes]);
+
+  function showNodeDetail(next: {
+    id: string;
+    title: string;
+    subtitle: string;
+    detail: string;
+    accent: string;
+    x: number;
+    y: number;
+  }) {
+    const x = Math.max(8, Math.min(next.x + 12, TOTAL_W - DETAIL_POPOVER_W - 8));
+    const y = Math.max(8, Math.min(next.y - 12, totalHeight - DETAIL_POPOVER_H - 8));
+    setExpandedNode({ ...next, x, y });
+  }
+
+  function hideNodeDetail(id: string) {
+    setExpandedNode((prev) => (prev?.id === id ? null : prev));
+  }
 
   // ── Click handlers ──
   function handleDayClick(day: number) {
@@ -580,15 +646,7 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
     }
     setSelectedScheduleId(id);
     const claimIds = scheduleToClaimsMap.get(id) ?? [];
-    let primary: string | null = null;
-    let best = 4;
-    for (const cid of claimIds) {
-      const diag = diagByClaim.get(cid);
-      if (diag) {
-        const sev = ({ high: 0, medium: 1, low: 2 } as Record<string, number>)[diag.severity] ?? 3;
-        if (sev < best) { best = sev; primary = cid; }
-      }
-    }
+    const primary = claimIds.find((cid) => diagByClaim.has(cid)) ?? null;
     if (primary) {
       selectClaim(primary);
       const d = diagByClaim.get(primary);
@@ -666,18 +724,43 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
           <svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="4,2" /></svg>
-          Constraint
+          Non-conflict Constraint
         </span>
-        <span style={{ color: "#94a3b8", marginLeft: "4px" }}>Click a schedule item to explore</span>
+        <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+          <svg width="22" height="12">
+            <line x1="0" y1="6" x2="14" y2="6" stroke="#ef4444" strokeWidth="1.5" />
+            <line x1="16" y1="3" x2="21" y2="8" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="21" y1="3" x2="16" y2="8" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          Conflict
+        </span>
+        <span style={{ color: "#94a3b8", marginLeft: "4px" }}>Hover any node for details</span>
       </div>
 
       {/* ── Visualization ── */}
-      <div style={{ overflowX: "auto" }}>
+      <div style={{ overflowX: "auto", position: "relative" }}>
         <svg width={TOTAL_W} height={totalHeight} style={{ display: "block" }}>
           <defs>
-            <marker id="arrow-claim-sched" markerWidth="7" markerHeight="6" refX="7" refY="3" orient="auto">
-              <path d="M0,0 L7,3 L0,6 z" fill="context-stroke" />
-            </marker>
+            {[...claimArrowMarkerByColor.entries()].map(([color, markerId]) => (
+              <marker
+                key={markerId}
+                id={markerId}
+                markerWidth="8"
+                markerHeight="8"
+                refX="7.2"
+                refY="4"
+                orient="auto"
+                markerUnits="userSpaceOnUse"
+              >
+                <path
+                  d="M0.8,0.8 L7.2,4 L0.8,7.2 L2.4,4 Z"
+                  fill={color}
+                  stroke={color}
+                  strokeWidth={0.5}
+                  strokeLinejoin="round"
+                />
+              </marker>
+            ))}
           </defs>
 
           {/* ── Column headers ── */}
@@ -693,7 +776,7 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
           {visibleClaims.map((claim) => {
             const cy = claimYMap.get(claim.claim_id);
             if (cy === undefined) return null;
-            const color = getClaimColor(claim.claim_id, diagnosedClaimIds, mechanismMap);
+            const color = claimColorMap.get(claim.claim_id) ?? PROVENANCE_COLORS.supported;
             const isHl = highlighted?.claimIds.has(claim.claim_id) ?? false;
             const dimmed = highlighted !== null && !isHl;
             return claim.source_step_ids.map((sid) => {
@@ -718,17 +801,22 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
             const schedIds = (claimToScheduleMap.get(claim.claim_id) ?? []).filter(
               (sid) => scheduleYMap.has(sid)
             );
-            const color = getClaimColor(claim.claim_id, diagnosedClaimIds, mechanismMap);
+            const visibleSchedIds = selectedScheduleId
+              ? schedIds.filter((sid) => sid === selectedScheduleId)
+              : schedIds;
+            if (visibleSchedIds.length === 0) return null;
+            const color = claimColorMap.get(claim.claim_id) ?? PROVENANCE_COLORS.supported;
+            const markerId = claimArrowMarkerByColor.get(color);
             const isHl = highlighted?.claimIds.has(claim.claim_id) ?? false;
             const dimmed = highlighted !== null && !isHl;
-            return schedIds.map((sid) => (
+            return visibleSchedIds.map((sid) => (
               <path key={`cl-sc-${claim.claim_id}-${sid}`}
                 d={cubicBezierPath(CL_X + CL_W, cy, SC_X - 6, schedCenterY(sid))}
                 fill="none" stroke={color}
                 strokeWidth={isHl ? 2 : 1.5}
-                strokeOpacity={dimmed ? 0.06 : isHl ? 0.85 : 0.45}
-                markerEnd="url(#arrow-claim-sched)"
-                style={{ transition: "stroke-opacity 0.2s" }}
+                opacity={dimmed ? 0.06 : isHl ? 0.85 : 0.45}
+                markerEnd={markerId ? `url(#${markerId})` : undefined}
+                style={{ transition: "opacity 0.2s" }}
               />
             ));
           })}
@@ -739,18 +827,31 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
             const profIds = scheduleToProfileMap.get(n.id) ?? [];
             const isSelected = selectedScheduleId === n.id;
             const dimmed = highlighted !== null && !isSelected;
+            const isConflict = n.isError;
+            if (selectedScheduleId && n.id !== selectedScheduleId) return null;
             return profIds.map((pid) => {
               const px = (profileXMap.get(pid) ?? 0) + PROF_NODE_W / 2;
               const py = CONTENT_TOP + PR_H / 2;
+              const cx = (SC_X + SC_W + px) / 2;
+              const cy = (sy + py) / 2;
               return (
-                <path key={`sc-pr-${n.id}-${pid}`}
-                  d={cubicBezierPath(SC_X + SC_W, sy, px, py)}
-                  fill="none" stroke="#8b5cf6"
-                  strokeWidth={isSelected ? 1.5 : 1}
-                  strokeDasharray="5,3"
-                  strokeOpacity={dimmed ? 0.04 : isSelected ? 0.7 : 0.15}
-                  style={{ transition: "stroke-opacity 0.2s" }}
-                />
+                <g key={`sc-pr-${n.id}-${pid}`}>
+                  <path
+                    d={cubicBezierPath(SC_X + SC_W, sy, px, py)}
+                    fill="none" stroke="#8b5cf6"
+                    strokeWidth={isSelected ? 1.5 : 1}
+                    strokeDasharray={isConflict ? undefined : "5,3"}
+                    strokeOpacity={dimmed ? 0.04 : isSelected ? 0.7 : 0.15}
+                    style={{ transition: "stroke-opacity 0.2s" }}
+                  />
+                  {isConflict && (
+                    <g transform={`translate(${cx}, ${cy})`} opacity={dimmed ? 0.04 : isSelected ? 0.7 : 0.4}>
+                      <circle cx={0} cy={0} r={6} fill="#ef4444" />
+                      <line x1={-2.6} y1={-2.6} x2={2.6} y2={2.6} stroke="#ffffff" strokeWidth={1.6} strokeLinecap="round" />
+                      <line x1={2.6} y1={-2.6} x2={-2.6} y2={2.6} stroke="#ffffff" strokeWidth={1.6} strokeLinecap="round" />
+                    </g>
+                  )}
+                </g>
               );
             });
           })}
@@ -762,15 +863,24 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
             const py = (poiMetaYMap.get(poiId) ?? 0) + PM_H / 2;
             const isSelected = selectedScheduleId === n.id;
             const dimmed = highlighted !== null && !isSelected;
+            const cx = (SC_X + SC_W + PM_X) / 2;
+            const cy = (sy + py) / 2;
+            if (selectedScheduleId && n.id !== selectedScheduleId) return null;
             return (
-              <path key={`sc-pm-${n.id}`}
-                d={cubicBezierPath(SC_X + SC_W, sy, PM_X, py)}
-                fill="none" stroke={POI_COLORS.border}
-                strokeWidth={isSelected ? 1.5 : 1}
-                strokeDasharray="5,3"
-                strokeOpacity={dimmed ? 0.04 : isSelected ? 0.7 : 0.15}
-                style={{ transition: "stroke-opacity 0.2s" }}
-              />
+              <g key={`sc-pm-${n.id}`}>
+                <path
+                  d={cubicBezierPath(SC_X + SC_W, sy, PM_X, py)}
+                  fill="none" stroke={POI_COLORS.border}
+                  strokeWidth={isSelected ? 1.5 : 1}
+                  strokeOpacity={dimmed ? 0.04 : isSelected ? 0.7 : 0.15}
+                  style={{ transition: "stroke-opacity 0.2s" }}
+                />
+                <g transform={`translate(${cx}, ${cy})`} opacity={dimmed ? 0.04 : isSelected ? 0.7 : 0.4}>
+                  <circle cx={0} cy={0} r={6} fill="#ef4444" />
+                  <line x1={-2.6} y1={-2.6} x2={2.6} y2={2.6} stroke="#ffffff" strokeWidth={1.6} strokeLinecap="round" />
+                  <line x1={2.6} y1={-2.6} x2={-2.6} y2={2.6} stroke="#ffffff" strokeWidth={1.6} strokeLinecap="round" />
+                </g>
+              </g>
             );
           })}
 
@@ -785,7 +895,20 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
             const accent = isTool ? "#6366f1" : "#94a3b8";
             return (
               <g key={node.id} transform={`translate(${EV_X}, ${y})`}
-                opacity={dimmed ? 0.2 : 1} style={{ transition: "opacity 0.2s" }}>
+                opacity={dimmed ? 0.2 : 1}
+                style={{ transition: "opacity 0.2s", cursor: "pointer" }}
+                onMouseEnter={() =>
+                  showNodeDetail({
+                    id: `ev-${node.id}`,
+                    title: `${node.type === "tool" ? "Tool" : "Thought"} Evidence`,
+                    subtitle: node.label,
+                    detail: node.fullDetail,
+                    accent: accent,
+                    x: EV_X + EV_W,
+                    y: y + h / 2,
+                  })
+                }
+                onMouseLeave={() => hideNodeDetail(`ev-${node.id}`)}>
                 <rect x={0} y={0} width={EV_W} height={h} rx={5}
                   fill={isHl ? (isTool ? "#eef2ff" : "#f8fafc") : "#fafafa"}
                   stroke={isHl ? accent : "#e2e8f0"} strokeWidth={isHl ? 1.5 : 1} />
@@ -807,12 +930,25 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
             const cy = claimYMap.get(claim.claim_id);
             if (cy === undefined) return null;
             const y = cy - CL_H / 2;
-            const color = getClaimColor(claim.claim_id, diagnosedClaimIds, mechanismMap);
+            const color = claimColorMap.get(claim.claim_id) ?? PROVENANCE_COLORS.supported;
             const isHl = highlighted?.claimIds.has(claim.claim_id) ?? false;
             const dimmed = highlighted !== null && !isHl;
             return (
               <g key={claim.claim_id} transform={`translate(${CL_X}, ${y})`}
-                opacity={dimmed ? 0.2 : 1} style={{ transition: "opacity 0.2s" }}>
+                opacity={dimmed ? 0.2 : 1}
+                style={{ transition: "opacity 0.2s", cursor: "pointer" }}
+                onMouseEnter={() =>
+                  showNodeDetail({
+                    id: `claim-${claim.claim_id}`,
+                    title: `Claim ${claim.claim_id.toUpperCase()}`,
+                    subtitle: claim.claim_type,
+                    detail: claim.text,
+                    accent: color,
+                    x: CL_X + CL_W,
+                    y: y + CL_H / 2,
+                  })
+                }
+                onMouseLeave={() => hideNodeDetail(`claim-${claim.claim_id}`)}>
                 <rect x={0} y={0} width={CL_W} height={CL_H} rx={5}
                   fill={isHl ? "#f0f9ff" : "#fafafa"}
                   stroke={isHl ? color : "#e2e8f0"} strokeWidth={isHl ? 1.5 : 1} />
@@ -834,27 +970,38 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
             const borderColor = isSelected ? "#3b82f6" : colors.border;
 
             if (n.kind === "day") {
-              // Day summary node — calendar icon + "Day X: N entries" + flagged count + chevron
-              const iCx = 22; const iCy = DAY_H / 2;
+              // Day summary node — "Day X: N entries" + flagged count + chevron
               const isExpanded = expandedDays.has(n.day);
               const flagged = dayFlaggedCount.get(n.day) ?? 0;
               const subtitle = n.isError
-                ? flagged > 0 ? `pace issue · ${flagged} flagged` : "exceeds pace cap"
+                ? flagged > 0 ? `pace issue · ${flagged} flagged` : "conflict detected"
                 : flagged > 0 ? `${flagged} flagged entr${flagged === 1 ? "y" : "ies"}` : "all clear";
               return (
                 <g key={n.id} transform={`translate(${SC_X}, ${y})`}
                   style={{ cursor: "pointer" }}
                   opacity={dimmed ? 0.2 : 1}
-                  onClick={() => handleDayClick(n.day)}>
+                  onClick={() => handleDayClick(n.day)}
+                  onMouseEnter={() => {
+                    const info = dayInfoByNum.get(n.day);
+                    showNodeDetail({
+                      id: `sched-${n.id}`,
+                      title: `Day ${n.day} Summary`,
+                      subtitle: n.isError ? "Conflict detected" : "No conflict",
+                      detail: `Date: ${info?.date ?? "Unknown"}\nEntries: ${n.count}\nFlagged items: ${dayFlaggedCount.get(n.day) ?? 0}`,
+                      accent: n.isError ? SCHED_ERROR.border : SCHED_VALID.border,
+                      x: SC_X + SC_W,
+                      y: y + DAY_H / 2,
+                    });
+                  }}
+                  onMouseLeave={() => hideNodeDetail(`sched-${n.id}`)}>
                   <rect x={0} y={0} width={SC_W} height={DAY_H} rx={6}
                     fill={isExpanded ? (n.isError ? "#fee2e2" : "#dcfce7") : colors.bg}
                     stroke={borderColor} strokeWidth={isExpanded ? 2 : 1} />
                   <rect x={0} y={0} width={5} height={DAY_H} rx={3} fill={colors.badge} />
-                  <CalendarIcon cx={iCx} cy={iCy} color={colors.badge} />
-                  <text x={42} y={DAY_H / 2 - 5} fontSize={12} fontWeight={700} fill={colors.text}>
+                  <text x={12} y={DAY_H / 2 - 5} fontSize={12} fontWeight={700} fill={colors.text}>
                     Day {n.day}: {n.count} entries
                   </text>
-                  <text x={42} y={DAY_H / 2 + 11} fontSize={9} fill={colors.text} opacity={0.75}>
+                  <text x={12} y={DAY_H / 2 + 11} fontSize={9} fill={colors.text} opacity={0.75}>
                     {subtitle}
                   </text>
                   {/* Expand/collapse chevron */}
@@ -864,22 +1011,32 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
                 </g>
               );
             } else {
-              // Individual entry node — category icon + "DayX HH:MM" + POI name
-              const iCx = 22; const iCy = SC_H / 2;
+              // Individual entry node — "DayX HH:MM" + POI name
               return (
                 <g key={n.id} transform={`translate(${SC_X + ENTRY_INDENT}, ${y})`}
                   style={{ cursor: "pointer" }}
                   opacity={dimmed ? 0.2 : 1}
-                  onClick={() => handleEntryClick(n.id)}>
+                  onClick={() => handleEntryClick(n.id)}
+                  onMouseEnter={() => {
+                    showNodeDetail({
+                      id: `sched-${n.id}`,
+                      title: n.entry.poi.name,
+                      subtitle: `Day ${n.day} ${n.entry.start_time.slice(0, 5)}-${n.entry.end_time.slice(0, 5)}`,
+                      detail: `Category: ${n.entry.poi.category}\nAddress: ${n.entry.poi.address}\nNotes: ${n.entry.notes || "None"}`,
+                      accent: n.isError ? SCHED_ERROR.border : SCHED_VALID.border,
+                      x: SC_X + SC_W - ENTRY_INDENT,
+                      y: y + SC_H / 2,
+                    });
+                  }}
+                  onMouseLeave={() => hideNodeDetail(`sched-${n.id}`)}>
                   <rect x={0} y={0} width={SC_W - ENTRY_INDENT} height={SC_H} rx={6}
                     fill={isSelected ? (n.isError ? "#fee2e2" : "#dcfce7") : colors.bg}
                     stroke={borderColor} strokeWidth={isSelected ? 2 : 1} />
                   <rect x={0} y={0} width={5} height={SC_H} rx={3} fill={colors.badge} />
-                  <CategoryIcon category={n.entry.poi.category} cx={iCx} cy={iCy} color={colors.badge} />
-                  <text x={42} y={SC_H / 2 - 4} fontSize={12} fontWeight={700} fill={colors.text}>
+                  <text x={12} y={SC_H / 2 - 4} fontSize={12} fontWeight={700} fill={colors.text}>
                     Day{n.day} {n.entry.start_time.slice(0, 5)}
                   </text>
-                  <text x={42} y={SC_H / 2 + 12} fontSize={9} fill="#64748b">
+                  <text x={12} y={SC_H / 2 + 12} fontSize={9} fill="#64748b">
                     {trunc(n.entry.poi.name, 20)}
                   </text>
                 </g>
@@ -895,7 +1052,20 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
             const dimmed = highlighted !== null && !isHl;
             return (
               <g key={node.id} transform={`translate(${x}, ${CONTENT_TOP})`}
-                opacity={dimmed ? 0.2 : 1} style={{ transition: "opacity 0.2s" }}>
+                opacity={dimmed ? 0.2 : 1}
+                style={{ transition: "opacity 0.2s", cursor: "pointer" }}
+                onMouseEnter={() =>
+                  showNodeDetail({
+                    id: `profile-${node.id}`,
+                    title: node.label,
+                    subtitle: "User Profile",
+                    detail: profileDetailById.get(node.id) ?? node.detail,
+                    accent: "#8b5cf6",
+                    x: x + PROF_NODE_W,
+                    y: CONTENT_TOP + PR_H / 2,
+                  })
+                }
+                onMouseLeave={() => hideNodeDetail(`profile-${node.id}`)}>
                 <rect x={0} y={0} width={PROF_NODE_W} height={PR_H} rx={5}
                   fill={isHl ? "#f5f3ff" : "#fdf4ff"}
                   stroke={isHl ? "#7c3aed" : "#d8b4fe"} strokeWidth={isHl ? 1.5 : 1} />
@@ -914,7 +1084,20 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
             const dimmed = highlighted !== null && !isHl;
             return (
               <g key={poiNode.id} transform={`translate(${PM_X}, ${y})`}
-                opacity={dimmed ? 0.2 : 1} style={{ transition: "opacity 0.2s" }}>
+                opacity={dimmed ? 0.2 : 1}
+                style={{ transition: "opacity 0.2s", cursor: "pointer" }}
+                onMouseEnter={() =>
+                  showNodeDetail({
+                    id: `poi-${poiNode.id}`,
+                    title: poiNode.label,
+                    subtitle: "POI Metadata",
+                    detail: poiNode.detail,
+                    accent: POI_COLORS.border,
+                    x: PM_X + PM_W,
+                    y: y + PM_H / 2,
+                  })
+                }
+                onMouseLeave={() => hideNodeDetail(`poi-${poiNode.id}`)}>
                 <rect x={0} y={0} width={PM_W} height={PM_H} rx={4}
                   fill={isHl ? POI_COLORS.bg : "#f0f9ff"}
                   stroke={isHl ? POI_COLORS.border : "#bae6fd"} strokeWidth={isHl ? 1.5 : 1} />
@@ -925,6 +1108,34 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
             );
           })}
         </svg>
+        {expandedNode && (
+          <div
+            style={{
+              position: "absolute",
+              left: `${expandedNode.x}px`,
+              top: `${expandedNode.y}px`,
+              width: `${DETAIL_POPOVER_W}px`,
+              border: `1px solid ${expandedNode.accent}`,
+              borderLeftWidth: "4px",
+              borderRadius: "8px",
+              background: "#f8fafc",
+              padding: "10px 12px",
+              zIndex: 10,
+              boxShadow: "0 8px 24px rgba(15, 23, 42, 0.16)",
+              pointerEvents: "none",
+            }}
+          >
+            <div>
+              <div>
+                <div style={{ fontSize: "12px", fontWeight: 700, color: "#0f172a" }}>{expandedNode.title}</div>
+                <div style={{ fontSize: "10px", color: "#64748b", marginTop: "2px" }}>{expandedNode.subtitle}</div>
+              </div>
+            </div>
+            <div style={{ marginTop: "6px", fontSize: "11px", color: "#334155", whiteSpace: "pre-wrap" }}>
+              {expandedNode.detail}
+            </div>
+          </div>
+        )}
       </div>
 
     </div>

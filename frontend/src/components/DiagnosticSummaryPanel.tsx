@@ -10,26 +10,17 @@
 
 import { useMemo } from "react";
 import type { Diagnosis } from "../types/diagnosis";
-import {
-  HALLUCINATION_LABELS,
-  MECHANISM_LABELS,
-  SEVERITY_COLORS,
-  MECHANISM_COLORS,
-} from "../types/diagnosis";
+import { HALLUCINATION_LABELS } from "../types/diagnosis";
 import { useSelection } from "../hooks/useSelectionContext";
 
 interface Props {
   diagnoses: Diagnosis[];
 }
 
-const SEVERITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
+const diagnosisDisplayName = (index: number) => `Issue ${index + 1}`;
+const ISSUE_ACCENT = "#ef4444";
 
 function EmptyState({ diagnoses, onViewIssues }: { diagnoses: Diagnosis[]; onViewIssues: () => void }) {
-  const counts = useMemo(() => {
-    const c = { high: 0, medium: 0, low: 0 };
-    for (const d of diagnoses) c[d.severity]++;
-    return c;
-  }, [diagnoses]);
 
   if (diagnoses.length === 0) {
     return (
@@ -61,26 +52,7 @@ function EmptyState({ diagnoses, onViewIssues }: { diagnoses: Diagnosis[]; onVie
         <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
           issues found
         </div>
-        <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
-          {counts.high > 0 && (
-            <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px" }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: SEVERITY_COLORS.high, display: "inline-block" }} />
-              <span style={{ color: "#64748b" }}>{counts.high} high</span>
-            </span>
-          )}
-          {counts.medium > 0 && (
-            <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px" }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: SEVERITY_COLORS.medium, display: "inline-block" }} />
-              <span style={{ color: "#64748b" }}>{counts.medium} med</span>
-            </span>
-          )}
-          {counts.low > 0 && (
-            <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px" }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: SEVERITY_COLORS.low, display: "inline-block" }} />
-              <span style={{ color: "#64748b" }}>{counts.low} low</span>
-            </span>
-          )}
-        </div>
+        <div style={{ fontSize: "12px", color: "#64748b" }}>Click View Issues to inspect details</div>
       </div>
 
       {/* View Issues button */}
@@ -110,25 +82,10 @@ function EmptyState({ diagnoses, onViewIssues }: { diagnoses: Diagnosis[]; onVie
 function DetailCard({ diag }: { diag: Diagnosis }) {
   return (
     <div style={{ padding: "4px 0" }}>
-      {/* Header: severity + type + mechanism */}
+      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
-        <span style={{
-          fontSize: "11px", fontWeight: 700, color: "#fff",
-          background: SEVERITY_COLORS[diag.severity],
-          padding: "2px 8px", borderRadius: "10px", textTransform: "uppercase",
-        }}>
-          {diag.severity}
-        </span>
         <span style={{ fontSize: "13px", fontWeight: 600, color: "#334155" }}>
           {HALLUCINATION_LABELS[diag.hallucination_type]}
-        </span>
-        <span style={{
-          fontSize: "11px", fontWeight: 600,
-          color: MECHANISM_COLORS[diag.mechanism],
-          border: `1px solid ${MECHANISM_COLORS[diag.mechanism]}`,
-          padding: "1px 6px", borderRadius: "4px",
-        }}>
-          {diag.mechanism}: {MECHANISM_LABELS[diag.mechanism]}
         </span>
       </div>
 
@@ -136,7 +93,7 @@ function DetailCard({ diag }: { diag: Diagnosis }) {
       <div style={{
         fontSize: "14px", color: "#1e293b", marginBottom: "12px",
         fontStyle: "italic", lineHeight: 1.5,
-        borderLeft: `3px solid ${SEVERITY_COLORS[diag.severity]}`,
+        borderLeft: `3px solid ${ISSUE_ACCENT}`,
         paddingLeft: "12px",
       }}>
         "{diag.claim.text}"
@@ -171,12 +128,9 @@ function DetailCard({ diag }: { diag: Diagnosis }) {
 }
 
 export function DiagnosticSummaryPanel({ diagnoses }: Props) {
-  const { selectedClaimId, selectedDiagnosisId, selectDiagnosis, selectClaim } = useSelection();
+  const { selectedClaimId, selectedDiagnosisId, selectDiagnosis, selectClaim, clearSelection } = useSelection();
 
-  const sorted = useMemo(
-    () => [...diagnoses].sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 2) - (SEVERITY_ORDER[b.severity] ?? 2)),
-    [diagnoses]
-  );
+  const sorted = diagnoses;
 
   // Resolve active diagnosis from either selectedDiagnosisId or selectedClaimId
   const activeDiag = useMemo(() => {
@@ -204,6 +158,24 @@ export function DiagnosticSummaryPanel({ diagnoses }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ marginBottom: "8px" }}>
+        <button
+          type="button"
+          onClick={clearSelection}
+          style={{
+            fontSize: "11px",
+            fontWeight: 600,
+            color: "#475569",
+            background: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            borderRadius: "4px",
+            padding: "4px 8px",
+            cursor: "pointer",
+          }}
+        >
+          ← Back
+        </button>
+      </div>
       {/* Mini tab bar */}
       <div style={{
         display: "flex", gap: "4px", marginBottom: "12px",
@@ -221,13 +193,13 @@ export function DiagnosticSummaryPanel({ diagnoses }: Props) {
               style={{
                 fontSize: "11px", fontWeight: isActive ? 700 : 500,
                 color: isActive ? "#fff" : "#64748b",
-                background: isActive ? SEVERITY_COLORS[diag.severity] : "#f1f5f9",
+                background: isActive ? ISSUE_ACCENT : "#f1f5f9",
                 border: "none", borderRadius: "4px",
                 padding: "3px 10px", cursor: "pointer",
                 transition: "all 0.15s ease",
               }}
             >
-              {diag.diagnosis_id}
+              {diagnosisDisplayName(i)}
             </button>
           );
         })}

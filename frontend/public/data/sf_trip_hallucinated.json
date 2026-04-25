@@ -18,7 +18,14 @@
       "timestamp": "2026-04-10T14:30:05",
       "content": "Searching for San Francisco POIs matching interests: nature, food, history",
       "tool_name": "poi_search",
-      "tool_input": {"destination": "San Francisco", "interests": ["nature", "food", "history"]},
+      "tool_input": {
+        "destination": "San Francisco",
+        "interests": [
+          "nature",
+          "food",
+          "history"
+        ]
+      },
       "confidence": 0.9,
       "token_count": 80
     },
@@ -81,7 +88,10 @@
       "timestamp": "2026-04-10T14:30:45",
       "content": "Formatting schedule for Notion visualization",
       "tool_name": "notion_viz",
-      "tool_input": {"format": "4_databases", "page_title": "SF Trip Apr 17-19"},
+      "tool_input": {
+        "format": "4_databases",
+        "page_title": "SF Trip Apr 17-19"
+      },
       "confidence": 0.9,
       "token_count": 80
     },
@@ -101,7 +111,9 @@
     {
       "claim_id": "c1",
       "text": "Golden Gate Bridge Welcome Center is open 08:00-18:00 on Thursday",
-      "source_step_ids": [2],
+      "source_step_ids": [
+        2
+      ],
       "claim_type": "poi_hours",
       "extracted_entities": {
         "poi_name": "Golden Gate Bridge Welcome Center",
@@ -109,12 +121,17 @@
         "value": "08:00-18:00",
         "day": "thursday"
       },
-      "answer_span": [42, 90]
+      "answer_span": [
+        42,
+        90
+      ]
     },
     {
       "claim_id": "c2",
       "text": "Swan Oyster Depot opens at 10:30",
-      "source_step_ids": [2],
+      "source_step_ids": [
+        2
+      ],
       "claim_type": "poi_hours",
       "extracted_entities": {
         "poi_name": "Swan Oyster Depot",
@@ -122,12 +139,17 @@
         "value": "10:30-17:30",
         "day": "thursday"
       },
-      "answer_span": [150, 200]
+      "answer_span": [
+        150,
+        200
+      ]
     },
     {
       "claim_id": "c3",
       "text": "Tartine Bakery closes at 21:00 (used for dinner)",
-      "source_step_ids": [3],
+      "source_step_ids": [
+        3
+      ],
       "claim_type": "poi_hours",
       "extracted_entities": {
         "poi_name": "Tartine Bakery",
@@ -135,12 +157,18 @@
         "value": "21:00",
         "day": "friday"
       },
-      "answer_span": [480, 530]
+      "answer_span": [
+        480,
+        530
+      ]
     },
     {
       "claim_id": "c4",
       "text": "Day 1 schedule has 7 activities (5 POIs + 2 restaurants)",
-      "source_step_ids": [5, 6],
+      "source_step_ids": [
+        5,
+        6
+      ],
       "claim_type": "profile_match",
       "extracted_entities": {
         "day": 1,
@@ -149,40 +177,272 @@
         "restaurant_entries": 2,
         "pace_limit": 5
       },
-      "answer_span": [42, 320]
+      "answer_span": [
+        42,
+        320
+      ]
     },
     {
       "claim_id": "c5",
       "text": "Swan Oyster Depot lunch 11:30-12:30 followed by Sotto Mare lunch 12:30-13:30",
-      "source_step_ids": [5],
+      "source_step_ids": [
+        5
+      ],
       "claim_type": "schedule_time",
       "extracted_entities": {
-        "entry_a": {"poi": "Swan Oyster Depot", "start": "11:30", "end": "12:30", "category": "restaurant"},
-        "entry_b": {"poi": "Sotto Mare", "start": "12:30", "end": "13:30", "category": "restaurant"}
+        "entry_a": {
+          "poi": "Swan Oyster Depot",
+          "start": "11:30",
+          "end": "12:30",
+          "category": "restaurant"
+        },
+        "entry_b": {
+          "poi": "Sotto Mare",
+          "start": "12:30",
+          "end": "13:30",
+          "category": "restaurant"
+        }
       },
-      "answer_span": [150, 260]
+      "answer_span": [
+        150,
+        260
+      ]
     },
     {
       "claim_id": "c6",
       "text": "Golden Gate Park Teahouse exists and is available for lunch on Day 3",
-      "source_step_ids": [6],
+      "source_step_ids": [
+        6
+      ],
       "claim_type": "poi_exists",
       "extracted_entities": {
         "poi_name": "Golden Gate Park Teahouse",
         "claimed_exists": true,
         "source": "agent_knowledge"
       },
-      "answer_span": [570, 620]
+      "answer_span": [
+        570,
+        620
+      ]
     },
     {
       "claim_id": "c7",
       "text": "Notion itinerary database has 17 entries but plan has 18",
-      "source_step_ids": [7, 8],
+      "source_step_ids": [
+        7,
+        8
+      ],
       "claim_type": "general",
       "extracted_entities": {
         "notion_count": 17,
         "plan_count": 18,
         "missing": "SFMOMA"
+      },
+      "answer_span": null
+    },
+    {
+      "claim_id": "c8",
+      "text": "Day 2 schedule contains 5 activities",
+      "source_step_ids": [
+        5
+      ],
+      "claim_type": "profile_match",
+      "extracted_entities": {
+        "day": 2,
+        "total_entries": 5
+      },
+      "answer_span": null
+    },
+    {
+      "claim_id": "c9",
+      "text": "Day 3 schedule contains 6 activities",
+      "source_step_ids": [
+        5
+      ],
+      "claim_type": "profile_match",
+      "extracted_entities": {
+        "day": 3,
+        "total_entries": 6
+      },
+      "answer_span": null
+    },
+    {
+      "claim_id": "c10",
+      "text": "Day 1 10:30 visit Lombard Street",
+      "source_step_ids": [
+        5
+      ],
+      "claim_type": "general",
+      "extracted_entities": {
+        "day": 1,
+        "poi_name": "Lombard Street",
+        "start_time": "10:30",
+        "end_time": "11:30"
+      },
+      "answer_span": null
+    },
+    {
+      "claim_id": "c11",
+      "text": "Day 1 14:00 visit Fisherman's Wharf",
+      "source_step_ids": [
+        5
+      ],
+      "claim_type": "general",
+      "extracted_entities": {
+        "day": 1,
+        "poi_name": "Fisherman's Wharf",
+        "start_time": "14:00",
+        "end_time": "16:00"
+      },
+      "answer_span": null
+    },
+    {
+      "claim_id": "c12",
+      "text": "Day 1 16:30 visit Coit Tower",
+      "source_step_ids": [
+        5
+      ],
+      "claim_type": "general",
+      "extracted_entities": {
+        "day": 1,
+        "poi_name": "Coit Tower",
+        "start_time": "16:30",
+        "end_time": "18:00"
+      },
+      "answer_span": null
+    },
+    {
+      "claim_id": "c13",
+      "text": "Day 1 18:30 visit Burma Superstar",
+      "source_step_ids": [
+        5
+      ],
+      "claim_type": "general",
+      "extracted_entities": {
+        "day": 1,
+        "poi_name": "Burma Superstar",
+        "start_time": "18:30",
+        "end_time": "19:30"
+      },
+      "answer_span": null
+    },
+    {
+      "claim_id": "c14",
+      "text": "Day 2 08:45 visit Alcatraz Island",
+      "source_step_ids": [
+        5
+      ],
+      "claim_type": "general",
+      "extracted_entities": {
+        "day": 2,
+        "poi_name": "Alcatraz Island",
+        "start_time": "08:45",
+        "end_time": "12:00"
+      },
+      "answer_span": null
+    },
+    {
+      "claim_id": "c15",
+      "text": "Day 2 12:30 visit Hog Island Oyster Co.",
+      "source_step_ids": [
+        5
+      ],
+      "claim_type": "general",
+      "extracted_entities": {
+        "day": 2,
+        "poi_name": "Hog Island Oyster Co.",
+        "start_time": "12:30",
+        "end_time": "13:30"
+      },
+      "answer_span": null
+    },
+    {
+      "claim_id": "c16",
+      "text": "Day 2 14:00 visit Exploratorium",
+      "source_step_ids": [
+        5
+      ],
+      "claim_type": "general",
+      "extracted_entities": {
+        "day": 2,
+        "poi_name": "Exploratorium",
+        "start_time": "14:00",
+        "end_time": "16:30"
+      },
+      "answer_span": null
+    },
+    {
+      "claim_id": "c17",
+      "text": "Day 2 17:00 visit Ferry Building Marketplace",
+      "source_step_ids": [
+        5
+      ],
+      "claim_type": "general",
+      "extracted_entities": {
+        "day": 2,
+        "poi_name": "Ferry Building Marketplace",
+        "start_time": "17:00",
+        "end_time": "18:00"
+      },
+      "answer_span": null
+    },
+    {
+      "claim_id": "c18",
+      "text": "Day 3 08:00 visit Muir Woods National Monument",
+      "source_step_ids": [
+        5
+      ],
+      "claim_type": "general",
+      "extracted_entities": {
+        "day": 3,
+        "poi_name": "Muir Woods National Monument",
+        "start_time": "08:00",
+        "end_time": "10:30"
+      },
+      "answer_span": null
+    },
+    {
+      "claim_id": "c19",
+      "text": "Day 3 11:00 visit Lands End Trail",
+      "source_step_ids": [
+        5
+      ],
+      "claim_type": "general",
+      "extracted_entities": {
+        "day": 3,
+        "poi_name": "Lands End Trail",
+        "start_time": "11:00",
+        "end_time": "12:00"
+      },
+      "answer_span": null
+    },
+    {
+      "claim_id": "c20",
+      "text": "Day 3 16:00 visit Twin Peaks",
+      "source_step_ids": [
+        5
+      ],
+      "claim_type": "general",
+      "extracted_entities": {
+        "day": 3,
+        "poi_name": "Twin Peaks",
+        "start_time": "16:00",
+        "end_time": "17:00"
+      },
+      "answer_span": null
+    },
+    {
+      "claim_id": "c21",
+      "text": "Day 3 17:30 visit Chinatown",
+      "source_step_ids": [
+        5
+      ],
+      "claim_type": "general",
+      "extracted_entities": {
+        "day": 3,
+        "poi_name": "Chinatown",
+        "start_time": "17:30",
+        "end_time": "18:30"
       },
       "answer_span": null
     }
@@ -194,45 +454,378 @@
     "user_profile": {
       "name": "Alex Chen",
       "travel_pace": "moderate",
-      "interests": ["nature", "food", "history"],
-      "dietary_preferences": ["seafood-lover", "no-spicy"],
+      "interests": [
+        "nature",
+        "food",
+        "history"
+      ],
+      "dietary_preferences": [
+        "seafood-lover",
+        "no-spicy"
+      ],
       "budget": "moderate",
-      "wishlist_pois": ["Golden Gate Bridge Welcome Center", "Alcatraz Island", "Muir Woods National Monument"],
+      "wishlist_pois": [
+        "Golden Gate Bridge Welcome Center",
+        "Alcatraz Island",
+        "Muir Woods National Monument"
+      ],
       "accessibility_needs": [],
-      "special_comments": ["Take a rest day after day 3"]
+      "special_comments": [
+        "Take a rest day after day 3"
+      ]
     },
     "daily_schedules": [
       {
         "date": "2026-04-17",
         "entries": [
-          {"day": 1, "start_time": "08:00:00", "end_time": "10:00:00", "poi": {"name": "Golden Gate Bridge Welcome Center", "category": "attraction", "address": "Golden Gate Bridge, San Francisco, CA 94129", "lat": 37.8077, "lng": -122.475, "opening_hours": {"thursday": "09:00-18:00"}, "avg_visit_duration_min": 90, "source": "codex_search", "raw_search_result": ""}, "notes": ""},
-          {"day": 1, "start_time": "10:30:00", "end_time": "11:30:00", "poi": {"name": "Lombard Street", "category": "attraction", "address": "Lombard St, San Francisco, CA 94133", "lat": 37.8021, "lng": -122.4187, "opening_hours": {}, "avg_visit_duration_min": 30, "source": "codex_search", "raw_search_result": ""}, "notes": ""},
-          {"day": 1, "start_time": "11:30:00", "end_time": "12:30:00", "poi": {"name": "Swan Oyster Depot", "category": "restaurant", "address": "1517 Polk St, San Francisco, CA 94109", "lat": 37.7909, "lng": -122.4215, "opening_hours": {"thursday": "10:30-17:30"}, "avg_visit_duration_min": 45, "source": "codex_search", "raw_search_result": ""}, "notes": "Lunch"},
-          {"day": 1, "start_time": "12:30:00", "end_time": "13:30:00", "poi": {"name": "Sotto Mare", "category": "restaurant", "address": "552 Green St, San Francisco, CA 94133", "lat": 37.7997, "lng": -122.4085, "opening_hours": {"thursday": "11:00-21:00"}, "avg_visit_duration_min": 60, "source": "codex_search", "raw_search_result": ""}, "notes": "Lunch"},
-          {"day": 1, "start_time": "14:00:00", "end_time": "16:00:00", "poi": {"name": "Fisherman's Wharf", "category": "attraction", "address": "Fisherman's Wharf, San Francisco, CA 94133", "lat": 37.808, "lng": -122.4177, "opening_hours": {"thursday": "06:00-23:00"}, "avg_visit_duration_min": 120, "source": "codex_search", "raw_search_result": ""}, "notes": ""},
-          {"day": 1, "start_time": "16:30:00", "end_time": "18:00:00", "poi": {"name": "Coit Tower", "category": "attraction", "address": "1 Telegraph Hill Blvd, San Francisco, CA 94133", "lat": 37.8024, "lng": -122.4058, "opening_hours": {"thursday": "10:00-17:00"}, "avg_visit_duration_min": 45, "source": "codex_search", "raw_search_result": ""}, "notes": "Coit Tower closes at 17:00 — scheduled 16:30-18:00 exceeds closing"},
-          {"day": 1, "start_time": "18:30:00", "end_time": "19:30:00", "poi": {"name": "Burma Superstar", "category": "restaurant", "address": "309 Clement St, San Francisco, CA 94118", "lat": 37.7828, "lng": -122.4626, "opening_hours": {"thursday": "11:30-15:00,17:00-21:00"}, "avg_visit_duration_min": 60, "source": "codex_search", "raw_search_result": ""}, "notes": "Dinner"}
+          {
+            "day": 1,
+            "start_time": "08:00:00",
+            "end_time": "10:00:00",
+            "poi": {
+              "name": "Golden Gate Bridge Welcome Center",
+              "category": "attraction",
+              "address": "Golden Gate Bridge, San Francisco, CA 94129",
+              "lat": 37.8077,
+              "lng": -122.475,
+              "opening_hours": {
+                "thursday": "09:00-18:00"
+              },
+              "avg_visit_duration_min": 90,
+              "source": "codex_search",
+              "raw_search_result": ""
+            },
+            "notes": ""
+          },
+          {
+            "day": 1,
+            "start_time": "10:30:00",
+            "end_time": "11:30:00",
+            "poi": {
+              "name": "Lombard Street",
+              "category": "attraction",
+              "address": "Lombard St, San Francisco, CA 94133",
+              "lat": 37.8021,
+              "lng": -122.4187,
+              "opening_hours": {},
+              "avg_visit_duration_min": 30,
+              "source": "codex_search",
+              "raw_search_result": ""
+            },
+            "notes": ""
+          },
+          {
+            "day": 1,
+            "start_time": "11:30:00",
+            "end_time": "12:30:00",
+            "poi": {
+              "name": "Swan Oyster Depot",
+              "category": "restaurant",
+              "address": "1517 Polk St, San Francisco, CA 94109",
+              "lat": 37.7909,
+              "lng": -122.4215,
+              "opening_hours": {
+                "thursday": "10:30-17:30"
+              },
+              "avg_visit_duration_min": 45,
+              "source": "codex_search",
+              "raw_search_result": ""
+            },
+            "notes": "Lunch"
+          },
+          {
+            "day": 1,
+            "start_time": "12:30:00",
+            "end_time": "13:30:00",
+            "poi": {
+              "name": "Sotto Mare",
+              "category": "restaurant",
+              "address": "552 Green St, San Francisco, CA 94133",
+              "lat": 37.7997,
+              "lng": -122.4085,
+              "opening_hours": {
+                "thursday": "11:00-21:00"
+              },
+              "avg_visit_duration_min": 60,
+              "source": "codex_search",
+              "raw_search_result": ""
+            },
+            "notes": "Lunch"
+          },
+          {
+            "day": 1,
+            "start_time": "14:00:00",
+            "end_time": "16:00:00",
+            "poi": {
+              "name": "Fisherman's Wharf",
+              "category": "attraction",
+              "address": "Fisherman's Wharf, San Francisco, CA 94133",
+              "lat": 37.808,
+              "lng": -122.4177,
+              "opening_hours": {
+                "thursday": "06:00-23:00"
+              },
+              "avg_visit_duration_min": 120,
+              "source": "codex_search",
+              "raw_search_result": ""
+            },
+            "notes": ""
+          },
+          {
+            "day": 1,
+            "start_time": "16:30:00",
+            "end_time": "18:00:00",
+            "poi": {
+              "name": "Coit Tower",
+              "category": "attraction",
+              "address": "1 Telegraph Hill Blvd, San Francisco, CA 94133",
+              "lat": 37.8024,
+              "lng": -122.4058,
+              "opening_hours": {
+                "thursday": "10:00-17:00"
+              },
+              "avg_visit_duration_min": 45,
+              "source": "codex_search",
+              "raw_search_result": ""
+            },
+            "notes": "Coit Tower closes at 17:00 — scheduled 16:30-18:00 exceeds closing"
+          },
+          {
+            "day": 1,
+            "start_time": "18:30:00",
+            "end_time": "19:30:00",
+            "poi": {
+              "name": "Burma Superstar",
+              "category": "restaurant",
+              "address": "309 Clement St, San Francisco, CA 94118",
+              "lat": 37.7828,
+              "lng": -122.4626,
+              "opening_hours": {
+                "thursday": "11:30-15:00,17:00-21:00"
+              },
+              "avg_visit_duration_min": 60,
+              "source": "codex_search",
+              "raw_search_result": ""
+            },
+            "notes": "Dinner"
+          }
         ]
       },
       {
         "date": "2026-04-18",
         "entries": [
-          {"day": 2, "start_time": "08:45:00", "end_time": "12:00:00", "poi": {"name": "Alcatraz Island", "category": "museum", "address": "Alcatraz Island, San Francisco, CA 94133", "lat": 37.8267, "lng": -122.4233, "opening_hours": {"friday": "08:45-21:00"}, "avg_visit_duration_min": 180, "source": "user_wishlist", "raw_search_result": ""}, "notes": "Wishlist item"},
-          {"day": 2, "start_time": "12:30:00", "end_time": "13:30:00", "poi": {"name": "Hog Island Oyster Co.", "category": "restaurant", "address": "1 Ferry Building #11, San Francisco, CA 94111", "lat": 37.7956, "lng": -122.3935, "opening_hours": {"friday": "11:00-21:00"}, "avg_visit_duration_min": 75, "source": "codex_search", "raw_search_result": ""}, "notes": "Lunch — seafood for the seafood lover"},
-          {"day": 2, "start_time": "14:00:00", "end_time": "16:30:00", "poi": {"name": "Exploratorium", "category": "museum", "address": "Pier 15, San Francisco, CA 94111", "lat": 37.8017, "lng": -122.3975, "opening_hours": {"friday": "10:00-17:00"}, "avg_visit_duration_min": 150, "source": "codex_search", "raw_search_result": ""}, "notes": ""},
-          {"day": 2, "start_time": "17:00:00", "end_time": "18:00:00", "poi": {"name": "Ferry Building Marketplace", "category": "shopping", "address": "1 Ferry Building, San Francisco, CA 94111", "lat": 37.7955, "lng": -122.3937, "opening_hours": {"friday": "10:00-19:00"}, "avg_visit_duration_min": 60, "source": "codex_search", "raw_search_result": ""}, "notes": ""},
-          {"day": 2, "start_time": "18:30:00", "end_time": "19:30:00", "poi": {"name": "Tartine Bakery", "category": "restaurant", "address": "600 Guerrero St, San Francisco, CA 94110", "lat": 37.7614, "lng": -122.4241, "opening_hours": {"friday": "08:00-17:00"}, "avg_visit_duration_min": 45, "source": "codex_search", "raw_search_result": ""}, "notes": "Dinner — HALLUCINATION: Tartine closes at 17:00, not 21:00"}
+          {
+            "day": 2,
+            "start_time": "08:45:00",
+            "end_time": "12:00:00",
+            "poi": {
+              "name": "Alcatraz Island",
+              "category": "museum",
+              "address": "Alcatraz Island, San Francisco, CA 94133",
+              "lat": 37.8267,
+              "lng": -122.4233,
+              "opening_hours": {
+                "friday": "08:45-21:00"
+              },
+              "avg_visit_duration_min": 180,
+              "source": "user_wishlist",
+              "raw_search_result": ""
+            },
+            "notes": "Wishlist item"
+          },
+          {
+            "day": 2,
+            "start_time": "12:30:00",
+            "end_time": "13:30:00",
+            "poi": {
+              "name": "Hog Island Oyster Co.",
+              "category": "restaurant",
+              "address": "1 Ferry Building #11, San Francisco, CA 94111",
+              "lat": 37.7956,
+              "lng": -122.3935,
+              "opening_hours": {
+                "friday": "11:00-21:00"
+              },
+              "avg_visit_duration_min": 75,
+              "source": "codex_search",
+              "raw_search_result": ""
+            },
+            "notes": "Lunch — seafood for the seafood lover"
+          },
+          {
+            "day": 2,
+            "start_time": "14:00:00",
+            "end_time": "16:30:00",
+            "poi": {
+              "name": "Exploratorium",
+              "category": "museum",
+              "address": "Pier 15, San Francisco, CA 94111",
+              "lat": 37.8017,
+              "lng": -122.3975,
+              "opening_hours": {
+                "friday": "10:00-17:00"
+              },
+              "avg_visit_duration_min": 150,
+              "source": "codex_search",
+              "raw_search_result": ""
+            },
+            "notes": ""
+          },
+          {
+            "day": 2,
+            "start_time": "17:00:00",
+            "end_time": "18:00:00",
+            "poi": {
+              "name": "Ferry Building Marketplace",
+              "category": "shopping",
+              "address": "1 Ferry Building, San Francisco, CA 94111",
+              "lat": 37.7955,
+              "lng": -122.3937,
+              "opening_hours": {
+                "friday": "10:00-19:00"
+              },
+              "avg_visit_duration_min": 60,
+              "source": "codex_search",
+              "raw_search_result": ""
+            },
+            "notes": ""
+          },
+          {
+            "day": 2,
+            "start_time": "18:30:00",
+            "end_time": "19:30:00",
+            "poi": {
+              "name": "Tartine Bakery",
+              "category": "restaurant",
+              "address": "600 Guerrero St, San Francisco, CA 94110",
+              "lat": 37.7614,
+              "lng": -122.4241,
+              "opening_hours": {
+                "friday": "08:00-17:00"
+              },
+              "avg_visit_duration_min": 45,
+              "source": "codex_search",
+              "raw_search_result": ""
+            },
+            "notes": "Dinner — HALLUCINATION: Tartine closes at 17:00, not 21:00"
+          }
         ]
       },
       {
         "date": "2026-04-19",
         "entries": [
-          {"day": 3, "start_time": "08:00:00", "end_time": "10:30:00", "poi": {"name": "Muir Woods National Monument", "category": "nature", "address": "1 Muir Woods Rd, Mill Valley, CA 94941", "lat": 37.897, "lng": -122.5811, "opening_hours": {"saturday": "08:00-17:00"}, "avg_visit_duration_min": 150, "source": "user_wishlist", "raw_search_result": ""}, "notes": "Wishlist item"},
-          {"day": 3, "start_time": "11:00:00", "end_time": "12:00:00", "poi": {"name": "Lands End Trail", "category": "nature", "address": "Lands End Trail, San Francisco, CA 94121", "lat": 37.7848, "lng": -122.5053, "opening_hours": {"saturday": "06:00-19:00"}, "avg_visit_duration_min": 90, "source": "codex_search", "raw_search_result": ""}, "notes": ""},
-          {"day": 3, "start_time": "12:30:00", "end_time": "13:30:00", "poi": {"name": "Golden Gate Park Teahouse", "category": "restaurant", "address": "Golden Gate Park, San Francisco, CA", "lat": 37.7694, "lng": -122.4700, "opening_hours": {}, "avg_visit_duration_min": 45, "source": "manual", "raw_search_result": ""}, "notes": "HALLUCINATION: This POI may not exist or has unverified data"},
-          {"day": 3, "start_time": "14:00:00", "end_time": "15:30:00", "poi": {"name": "SFMOMA", "category": "museum", "address": "151 3rd St, San Francisco, CA 94103", "lat": 37.7857, "lng": -122.4011, "opening_hours": {"saturday": "10:00-17:00"}, "avg_visit_duration_min": 120, "source": "codex_search", "raw_search_result": ""}, "notes": ""},
-          {"day": 3, "start_time": "16:00:00", "end_time": "17:00:00", "poi": {"name": "Twin Peaks", "category": "nature", "address": "501 Twin Peaks Blvd, San Francisco, CA 94114", "lat": 37.7544, "lng": -122.4477, "opening_hours": {"saturday": "05:00-00:00"}, "avg_visit_duration_min": 60, "source": "codex_search", "raw_search_result": ""}, "notes": "Sunset view"},
-          {"day": 3, "start_time": "17:30:00", "end_time": "18:30:00", "poi": {"name": "Chinatown", "category": "attraction", "address": "Grant Ave, San Francisco, CA 94108", "lat": 37.7941, "lng": -122.4078, "opening_hours": {"saturday": "08:00-22:00"}, "avg_visit_duration_min": 90, "source": "codex_search", "raw_search_result": ""}, "notes": "Dinner area"}
+          {
+            "day": 3,
+            "start_time": "08:00:00",
+            "end_time": "10:30:00",
+            "poi": {
+              "name": "Muir Woods National Monument",
+              "category": "nature",
+              "address": "1 Muir Woods Rd, Mill Valley, CA 94941",
+              "lat": 37.897,
+              "lng": -122.5811,
+              "opening_hours": {
+                "saturday": "08:00-17:00"
+              },
+              "avg_visit_duration_min": 150,
+              "source": "user_wishlist",
+              "raw_search_result": ""
+            },
+            "notes": "Wishlist item"
+          },
+          {
+            "day": 3,
+            "start_time": "11:00:00",
+            "end_time": "12:00:00",
+            "poi": {
+              "name": "Lands End Trail",
+              "category": "nature",
+              "address": "Lands End Trail, San Francisco, CA 94121",
+              "lat": 37.7848,
+              "lng": -122.5053,
+              "opening_hours": {
+                "saturday": "06:00-19:00"
+              },
+              "avg_visit_duration_min": 90,
+              "source": "codex_search",
+              "raw_search_result": ""
+            },
+            "notes": ""
+          },
+          {
+            "day": 3,
+            "start_time": "12:30:00",
+            "end_time": "13:30:00",
+            "poi": {
+              "name": "Golden Gate Park Teahouse",
+              "category": "restaurant",
+              "address": "Golden Gate Park, San Francisco, CA",
+              "lat": 37.7694,
+              "lng": -122.47,
+              "opening_hours": {},
+              "avg_visit_duration_min": 45,
+              "source": "manual",
+              "raw_search_result": ""
+            },
+            "notes": "HALLUCINATION: This POI may not exist or has unverified data"
+          },
+          {
+            "day": 3,
+            "start_time": "14:00:00",
+            "end_time": "15:30:00",
+            "poi": {
+              "name": "SFMOMA",
+              "category": "museum",
+              "address": "151 3rd St, San Francisco, CA 94103",
+              "lat": 37.7857,
+              "lng": -122.4011,
+              "opening_hours": {
+                "saturday": "10:00-17:00"
+              },
+              "avg_visit_duration_min": 120,
+              "source": "codex_search",
+              "raw_search_result": ""
+            },
+            "notes": ""
+          },
+          {
+            "day": 3,
+            "start_time": "16:00:00",
+            "end_time": "17:00:00",
+            "poi": {
+              "name": "Twin Peaks",
+              "category": "nature",
+              "address": "501 Twin Peaks Blvd, San Francisco, CA 94114",
+              "lat": 37.7544,
+              "lng": -122.4477,
+              "opening_hours": {
+                "saturday": "05:00-00:00"
+              },
+              "avg_visit_duration_min": 60,
+              "source": "codex_search",
+              "raw_search_result": ""
+            },
+            "notes": "Sunset view"
+          },
+          {
+            "day": 3,
+            "start_time": "17:30:00",
+            "end_time": "18:30:00",
+            "poi": {
+              "name": "Chinatown",
+              "category": "attraction",
+              "address": "Grant Ave, San Francisco, CA 94108",
+              "lat": 37.7941,
+              "lng": -122.4078,
+              "opening_hours": {
+                "saturday": "08:00-22:00"
+              },
+              "avg_visit_duration_min": 90,
+              "source": "codex_search",
+              "raw_search_result": ""
+            },
+            "notes": "Dinner area"
+          }
         ]
       }
     ],

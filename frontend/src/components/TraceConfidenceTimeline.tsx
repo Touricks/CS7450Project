@@ -44,18 +44,6 @@ export function TraceConfidenceTimeline({ steps, diagnoses }: Props) {
     return ids;
   }, [diagnoses]);
 
-  // Root-cause steps with mechanism labels
-  const rootCauseMap = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const d of diagnoses) {
-      if (d.causal_chain.length > 0) {
-        const root = d.causal_chain[0];
-        if (!map.has(root)) map.set(root, d.mechanism);
-      }
-    }
-    return map;
-  }, [diagnoses]);
-
   const tokenCounts = useMemo(
     () => steps.map((s) => s.token_count ?? 0),
     [steps]
@@ -127,7 +115,6 @@ export function TraceConfidenceTimeline({ steps, diagnoses }: Props) {
           const isCausal = causalStepIds.has(step.step_id);
           const isHighlighted = highlightedStepIds.includes(step.step_id);
           const isHovered = hoveredStepId === step.step_id;
-          const rootMech = rootCauseMap.get(step.step_id);
 
           const barFill = isCausal ? "#fecaca" : "#dbeafe";
           const barStroke = isCausal ? "#ef4444" : "#93c5fd";
@@ -170,19 +157,6 @@ export function TraceConfidenceTimeline({ steps, diagnoses }: Props) {
               >
                 {tokens}
               </text>
-
-              {/* Root-cause mechanism badge on top of bar */}
-              {rootMech && (
-                <g transform={`translate(${x + barW / 2}, ${yScale(tokens) - 18})`}>
-                  <rect x={-12} y={-8} width={24} height={14} rx={3} fill="#dc2626" />
-                  <text
-                    textAnchor="middle" y={3}
-                    fontSize={8} fontWeight={700} fill="#fff"
-                  >
-                    {rootMech}
-                  </text>
-                </g>
-              )}
 
               {/* X-axis: step label */}
               <text
@@ -235,11 +209,6 @@ export function TraceConfidenceTimeline({ steps, diagnoses }: Props) {
           <rect x={100} y={-5} width={10} height={10} rx={2} fill="#fecaca" stroke="#ef4444" strokeWidth={1} />
           <text x={114} y={4} fontSize={9} fill="#64748b">causal chain step</text>
 
-          <g transform="translate(250, 0)">
-            <rect x={-12} y={-7} width={24} height={14} rx={3} fill="#dc2626" />
-            <text textAnchor="middle" y={4} fontSize={8} fontWeight={700} fill="#fff">B3</text>
-          </g>
-          <text x={270} y={4} fontSize={9} fill="#64748b">root cause</text>
         </g>
       </g>
     </svg>

@@ -25,11 +25,8 @@ export const STEP_TYPE_COLORS = {
 /** Get provenance color for a claim based on its diagnosis status */
 export function getClaimColor(
   claimId: string,
-  diagnosedClaimIds: Set<string>,
-  mechanismMap: Map<string, string>
+  diagnosedClaimIds: Set<string>
 ): string {
   if (!diagnosedClaimIds.has(claimId)) return PROVENANCE_COLORS.supported;
-  const mechanism = mechanismMap.get(claimId);
-  if (mechanism === "A") return PROVENANCE_COLORS.dataGrounded;
   return PROVENANCE_COLORS.fabricated;
 }
