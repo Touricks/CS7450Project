@@ -16,7 +16,7 @@
  * React renders all SVG. D3 computes path geometry only.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import type { Claim, TraceStep, TravelPlan, ScheduleEntry } from "../types/trace";
 import type { Diagnosis } from "../types/diagnosis";
 import { useSelection } from "../hooks/useSelectionContext";
@@ -141,9 +141,10 @@ function trunc(s: string, n: number): string {
 }
 
 export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Props) {
-  const { selectClaim, selectDiagnosis, clearSelection } = useSelection();
+  const { selectedClaimId, selectClaim, selectDiagnosis, clearSelection } = useSelection();
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<number>>(new Set());
+  const skipNextClaimEffect = useRef(false);
 
   // ── Diagnosis lookups ──
   const diagnosedClaimIds = useMemo(
@@ -565,11 +566,13 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
     // Deselect any child entry that was selected when collapsing
     if (isCollapsing && selectedScheduleId?.startsWith(`s${day}-`)) {
       setSelectedScheduleId(null);
+      skipNextClaimEffect.current = true;
       clearSelection();
     }
   }
 
   function handleEntryClick(id: string) {
+    skipNextClaimEffect.current = true;
     if (selectedScheduleId === id) {
       setSelectedScheduleId(null);
       clearSelection();
@@ -594,6 +597,34 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
       clearSelection();
     }
   }
+
+  // ── Bidirectional: react to external selectedClaimId changes (from DiagnosticSummaryPanel) ──
+  useEffect(() => {
+    if (skipNextClaimEffect.current) {
+      skipNextClaimEffect.current = false;
+      return;
+    }
+    if (!selectedClaimId) {
+      setSelectedScheduleId(null);
+      return;
+    }
+    const schedIds = claimToScheduleMap.get(selectedClaimId) ?? [];
+    // Prefer an entry node over a day node
+    const targetId = schedIds.find((id) => !id.startsWith("day-")) ?? schedIds[0] ?? null;
+    if (!targetId) return;
+    // Expand the containing day if needed
+    const match = targetId.match(/^s(\d+)-/);
+    if (match) {
+      const day = parseInt(match[1], 10);
+      setExpandedDays((prev) => {
+        if (prev.has(day)) return prev;
+        const next = new Set(prev);
+        next.add(day);
+        return next;
+      });
+    }
+    setSelectedScheduleId(targetId);
+  }, [selectedClaimId, claimToScheduleMap]);
 
   // ── SVG dimensions ──
   const evColH = evidenceNodes.reduce(
