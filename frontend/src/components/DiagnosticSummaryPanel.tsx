@@ -10,11 +10,13 @@
 
 import { useMemo } from "react";
 import type { Diagnosis } from "../types/diagnosis";
+import type { Claim } from "../types/trace";
 import { HALLUCINATION_LABELS } from "../types/diagnosis";
 import { useSelection } from "../hooks/useSelectionContext";
 
 interface Props {
   diagnoses: Diagnosis[];
+  claims: Claim[];
 }
 
 const diagnosisDisplayName = (index: number) => `Issue ${index + 1}`;
@@ -127,7 +129,30 @@ function DetailCard({ diag }: { diag: Diagnosis }) {
   );
 }
 
-export function DiagnosticSummaryPanel({ diagnoses }: Props) {
+function ClaimFallbackCard({ claim }: { claim: Claim }) {
+  return (
+    <div style={{ padding: "4px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
+        <span style={{ fontSize: "13px", fontWeight: 600, color: "#334155" }}>
+          Inferred Issue (No manual diagnosis)
+        </span>
+      </div>
+      <div style={{
+        fontSize: "14px", color: "#1e293b", marginBottom: "12px",
+        fontStyle: "italic", lineHeight: 1.5,
+        borderLeft: `3px solid ${ISSUE_ACCENT}`,
+        paddingLeft: "12px",
+      }}>
+        "{claim.text}"
+      </div>
+      <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6 }}>
+        Claim ID: {claim.claim_id.toUpperCase()} · Type: {claim.claim_type}
+      </div>
+    </div>
+  );
+}
+
+export function DiagnosticSummaryPanel({ diagnoses, claims }: Props) {
   const { selectedClaimId, selectedDiagnosisId, selectDiagnosis, selectClaim, clearSelection } = useSelection();
 
   const sorted = diagnoses;
@@ -144,9 +169,13 @@ export function DiagnosticSummaryPanel({ diagnoses }: Props) {
   }, [sorted, selectedDiagnosisId, selectedClaimId]);
 
   const activeIndex = activeDiag ? sorted.indexOf(activeDiag) : -1;
+  const activeClaim = useMemo(
+    () => (selectedClaimId ? claims.find((c) => c.claim_id === selectedClaimId) ?? null : null),
+    [claims, selectedClaimId]
+  );
 
   // No selection → empty state
-  if (!activeDiag) {
+  if (!activeDiag && !activeClaim) {
     function handleViewIssues() {
       const first = sorted[0];
       if (!first) return;
@@ -176,43 +205,44 @@ export function DiagnosticSummaryPanel({ diagnoses }: Props) {
           ← Back
         </button>
       </div>
-      {/* Mini tab bar */}
-      <div style={{
-        display: "flex", gap: "4px", marginBottom: "12px",
-        borderBottom: "1px solid #e2e8f0", paddingBottom: "8px",
-      }}>
-        {sorted.map((diag, i) => {
-          const isActive = i === activeIndex;
-          return (
-            <button
-              key={diag.diagnosis_id}
-              onClick={() => {
-                selectDiagnosis(diag.diagnosis_id, diag.causal_chain);
-                selectClaim(diag.claim.claim_id);
-              }}
-              style={{
-                fontSize: "11px", fontWeight: isActive ? 700 : 500,
-                color: isActive ? "#fff" : "#64748b",
-                background: isActive ? ISSUE_ACCENT : "#f1f5f9",
-                border: "none", borderRadius: "4px",
-                padding: "3px 10px", cursor: "pointer",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {diagnosisDisplayName(i)}
-            </button>
-          );
-        })}
+      {activeDiag && (
+        <div style={{
+          display: "flex", gap: "4px", marginBottom: "12px",
+          borderBottom: "1px solid #e2e8f0", paddingBottom: "8px",
+        }}>
+          {sorted.map((diag, i) => {
+            const isActive = i === activeIndex;
+            return (
+              <button
+                key={diag.diagnosis_id}
+                onClick={() => {
+                  selectDiagnosis(diag.diagnosis_id, diag.causal_chain);
+                  selectClaim(diag.claim.claim_id);
+                }}
+                style={{
+                  fontSize: "11px", fontWeight: isActive ? 700 : 500,
+                  color: isActive ? "#fff" : "#64748b",
+                  background: isActive ? ISSUE_ACCENT : "#f1f5f9",
+                  border: "none", borderRadius: "4px",
+                  padding: "3px 10px", cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                {diagnosisDisplayName(i)}
+              </button>
+            );
+          })}
 
-        {/* Counter */}
-        <span style={{ marginLeft: "auto", fontSize: "11px", color: "#94a3b8", alignSelf: "center" }}>
-          {activeIndex + 1} / {sorted.length}
-        </span>
-      </div>
+          {/* Counter */}
+          <span style={{ marginLeft: "auto", fontSize: "11px", color: "#94a3b8", alignSelf: "center" }}>
+            {activeIndex + 1} / {sorted.length}
+          </span>
+        </div>
+      )}
 
       {/* Single detail card */}
       <div style={{ flex: 1, overflow: "auto" }}>
-        <DetailCard diag={activeDiag} />
+        {activeDiag ? <DetailCard diag={activeDiag} /> : activeClaim ? <ClaimFallbackCard claim={activeClaim} /> : null}
       </div>
     </div>
   );

@@ -579,6 +579,25 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
     }
     return map;
   }, [conflictGraph, poiMetaNodes, conflictScheduleEntryToOurId]);
+  const conflictRelatedClaimsBySchedule = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const edge of conflictGraph.edges) {
+      if (!edge.relatedClaimId) continue;
+      const endpoints = [edge.source, edge.target];
+      for (const endpoint of endpoints) {
+        if (!endpoint.startsWith("schedule-day")) continue;
+        const sid = /^schedule-day\d+$/.test(endpoint)
+          ? endpoint.replace(/^schedule-day/, "day-")
+          : conflictScheduleEntryToOurId.get(endpoint);
+        if (!sid) continue;
+        if (!map.has(sid)) map.set(sid, []);
+        if (!map.get(sid)!.includes(edge.relatedClaimId)) {
+          map.get(sid)!.push(edge.relatedClaimId);
+        }
+      }
+    }
+    return map;
+  }, [conflictGraph, conflictScheduleEntryToOurId]);
 
   // ── Highlight state ──
   const highlighted = useMemo(() => {
@@ -620,8 +639,31 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
     setExpandedNode((prev) => (prev?.id === id ? null : prev));
   }
 
+  function selectForScheduleNode(scheduleId: string) {
+    const linkedClaims = scheduleToClaimsMap.get(scheduleId) ?? [];
+    const relatedConflictClaims = conflictRelatedClaimsBySchedule.get(scheduleId) ?? [];
+    const candidates = [...linkedClaims, ...relatedConflictClaims];
+    const diagnosed = candidates.find((cid) => diagByClaim.has(cid)) ?? null;
+
+    if (diagnosed) {
+      selectClaim(diagnosed);
+      const d = diagByClaim.get(diagnosed);
+      if (d) selectDiagnosis(d.diagnosis_id, d.causal_chain);
+      return;
+    }
+
+    if (candidates.length > 0) {
+      selectClaim(candidates[0]);
+      selectDiagnosis(null, []);
+      return;
+    }
+
+    clearSelection();
+  }
+
   // ── Click handlers ──
   function handleDayClick(day: number) {
+    const dayId = dayNodeId(day);
     const isCollapsing = expandedDays.has(day);
     setExpandedDays((prev) => {
       const next = new Set(prev);
@@ -629,10 +671,19 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
       else next.add(day);
       return next;
     });
+
+    skipNextClaimEffect.current = true;
+    if (selectedScheduleId === dayId) {
+      setSelectedScheduleId(null);
+      clearSelection();
+      return;
+    }
+    setSelectedScheduleId(dayId);
+    selectForScheduleNode(dayId);
+
     // Deselect any child entry that was selected when collapsing
     if (isCollapsing && selectedScheduleId?.startsWith(`s${day}-`)) {
       setSelectedScheduleId(null);
-      skipNextClaimEffect.current = true;
       clearSelection();
     }
   }
@@ -645,15 +696,7 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
       return;
     }
     setSelectedScheduleId(id);
-    const claimIds = scheduleToClaimsMap.get(id) ?? [];
-    const primary = claimIds.find((cid) => diagByClaim.has(cid)) ?? null;
-    if (primary) {
-      selectClaim(primary);
-      const d = diagByClaim.get(primary);
-      if (d) selectDiagnosis(d.diagnosis_id, d.causal_chain);
-    } else {
-      clearSelection();
-    }
+    selectForScheduleNode(id);
   }
 
   // ── Bidirectional: react to external selectedClaimId changes (from DiagnosticSummaryPanel) ──

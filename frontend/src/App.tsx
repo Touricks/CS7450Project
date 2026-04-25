@@ -40,7 +40,7 @@ function AppContent() {
         />
       }
       summaryPanel={
-        <DiagnosticSummaryPanel diagnoses={diagnoses} />
+        <DiagnosticSummaryPanel diagnoses={diagnoses} claims={trace.claims} />
       }
     />
   );
