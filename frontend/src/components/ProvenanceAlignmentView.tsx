@@ -579,6 +579,28 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
     }
     return map;
   }, [conflictGraph, poiMetaNodes, conflictScheduleEntryToOurId]);
+  const schedulePeerConflictPairs = useMemo(() => {
+    const pairs: { a: string; b: string; type: string }[] = [];
+    for (const edge of conflictGraph.edges) {
+      const endpoints = [edge.source, edge.target].filter(
+        (id) => id.startsWith("schedule-day") && !/^schedule-day\d+$/.test(id)
+      );
+      if (endpoints.length !== 2) continue;
+      const a = conflictScheduleEntryToOurId.get(endpoints[0]);
+      const b = conflictScheduleEntryToOurId.get(endpoints[1]);
+      if (!a || !b || a === b) continue;
+      pairs.push({ a, b, type: edge.type });
+    }
+    return pairs;
+  }, [conflictGraph, conflictScheduleEntryToOurId]);
+  const scheduleIdsWithPeerConflict = useMemo(() => {
+    const set = new Set<string>();
+    for (const { a, b } of schedulePeerConflictPairs) {
+      set.add(a);
+      set.add(b);
+    }
+    return set;
+  }, [schedulePeerConflictPairs]);
   const conflictRelatedClaimsBySchedule = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const edge of conflictGraph.edges) {
@@ -654,7 +676,6 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
 
     if (candidates.length > 0) {
       selectClaim(candidates[0]);
-      selectDiagnosis(null, []);
       return;
     }
 
@@ -864,6 +885,37 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
             ));
           })}
 
+          {/* ── Edges: Schedule ↔ Schedule (peer conflicts, solid + X) ── */}
+          {schedulePeerConflictPairs.map((pair, idx) => {
+            if (!scheduleYMap.has(pair.a) || !scheduleYMap.has(pair.b)) return null;
+            if (selectedScheduleId && pair.a !== selectedScheduleId && pair.b !== selectedScheduleId) return null;
+            const y1 = schedCenterY(pair.a);
+            const y2 = schedCenterY(pair.b);
+            const x = SC_X + SC_W - 2;
+            const cx = SC_X + SC_W + 34;
+            const path = `M ${x} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x} ${y2}`;
+            const isSelected = selectedScheduleId !== null && (pair.a === selectedScheduleId || pair.b === selectedScheduleId);
+            const dimmed = highlighted !== null && !isSelected;
+            const mx = (x + cx) / 2;
+            const my = (y1 + y2) / 2;
+            return (
+              <g key={`sc-sc-${pair.a}-${pair.b}-${idx}`}>
+                <path
+                  d={path}
+                  fill="none"
+                  stroke="#ef4444"
+                  strokeWidth={isSelected ? 1.8 : 1.2}
+                  strokeOpacity={dimmed ? 0.04 : isSelected ? 0.72 : 0.28}
+                />
+                <g transform={`translate(${mx}, ${my})`} opacity={dimmed ? 0.04 : isSelected ? 0.72 : 0.45}>
+                  <circle cx={0} cy={0} r={5.5} fill="#ef4444" />
+                  <line x1={-2.4} y1={-2.4} x2={2.4} y2={2.4} stroke="#ffffff" strokeWidth={1.4} strokeLinecap="round" />
+                  <line x1={2.4} y1={-2.4} x2={-2.4} y2={2.4} stroke="#ffffff" strokeWidth={1.4} strokeLinecap="round" />
+                </g>
+              </g>
+            );
+          })}
+
           {/* ── Edges: Schedule → User Profile (dashed, fan to horizontal row) ── */}
           {visibleScheduleNodes.map((n) => {
             const sy = schedCenterY(n.id);
@@ -871,6 +923,7 @@ export function ProvenanceAlignmentView({ claims, steps, diagnoses, plan }: Prop
             const isSelected = selectedScheduleId === n.id;
             const dimmed = highlighted !== null && !isSelected;
             const isConflict = n.isError;
+            if (n.kind === "entry" && scheduleIdsWithPeerConflict.has(n.id)) return null;
             if (selectedScheduleId && n.id !== selectedScheduleId) return null;
             return profIds.map((pid) => {
               const px = (profileXMap.get(pid) ?? 0) + PROF_NODE_W / 2;

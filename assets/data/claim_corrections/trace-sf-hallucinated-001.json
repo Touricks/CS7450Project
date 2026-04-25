@@ -6,56 +6,77 @@
       "diagnosis_id": "d1",
       "claim_id": "c3",
       "hallucination_type": "poi_results_error",
-      "mechanism": "B3",
-      "severity": "high",
       "evidence": "Agent claimed Tartine Bakery closes at 21:00 (step 3 thought), but the search result (step 2) correctly shows it closes at 17:00. The agent fabricated the 21:00 closing time without tool support — overconfident bypass.",
       "ground_truth": "Tartine Bakery closes at 17:00 on Friday. It is a bakery, not a dinner restaurant.",
-      "causal_chain": [2, 3, 5],
+      "causal_chain": [
+        2,
+        3,
+        5
+      ],
       "fix_suggestion": "Remove Tartine Bakery from dinner slot. Search for restaurants open after 18:00 near Ferry Building."
     },
     {
       "diagnosis_id": "d2",
       "claim_id": "c4",
       "hallucination_type": "poi_arrangement_error",
-      "mechanism": "B2",
-      "severity": "medium",
       "evidence": "Day 1 has 7 entries (5 POIs + 2 restaurants). User profile specifies moderate pace (max 5 POIs/day). Even counting only non-restaurant POIs (5), this is at the limit. With 7 total activities, the day is overpacked for a moderate traveler. The agent lost track of the pace constraint during multi-step scheduling.",
       "ground_truth": "Moderate pace allows max 5 POIs per day. Day 1 has 5 POIs + 2 restaurants = 7 activities total.",
-      "causal_chain": [0, 4, 5, 6],
+      "causal_chain": [
+        0,
+        4,
+        5,
+        6
+      ],
       "fix_suggestion": "Move Coit Tower or Lombard Street to Day 2 or Day 3 to reduce Day 1 density."
     },
     {
       "diagnosis_id": "d3",
       "claim_id": "c5",
       "hallucination_type": "poi_schedule_error",
-      "mechanism": "B2",
-      "severity": "high",
       "evidence": "Swan Oyster Depot (11:30-12:30) and Sotto Mare (12:30-13:30) are consecutive restaurant entries with no gap. Both are lunch restaurants scheduled back-to-back, which is impractical — a traveler wouldn't eat two full lunches consecutively. The agent lost context about what constitutes a reasonable dining schedule.",
       "ground_truth": "Only one lunch restaurant should be scheduled per meal window.",
-      "causal_chain": [4, 5, 6],
+      "causal_chain": [
+        4,
+        5,
+        6
+      ],
       "fix_suggestion": "Keep Swan Oyster Depot for lunch (seafood-lover preference). Remove Sotto Mare from Day 1 or move to another day's lunch slot."
     },
     {
       "diagnosis_id": "d4",
       "claim_id": "c6",
       "hallucination_type": "poi_results_error",
-      "mechanism": "B3",
-      "severity": "high",
       "evidence": "Agent included 'Golden Gate Park Teahouse' in the itinerary (step 6) despite no search result supporting its existence. The POI search (step 2) noted 'Golden Gate Park Teahouse (no data available)' but the agent used it anyway based on parametric knowledge. This is a classic overconfident tool bypass — the agent should have searched for verified lunch options near Golden Gate Park.",
       "ground_truth": "No verified restaurant called 'Golden Gate Park Teahouse' exists in the ground truth database. The Japanese Tea Garden in Golden Gate Park exists but has different hours and is primarily a garden, not a restaurant.",
-      "causal_chain": [2, 6],
+      "causal_chain": [
+        2,
+        6
+      ],
       "fix_suggestion": "Search for verified restaurants near Lands End Trail / Golden Gate Park area for Day 3 lunch."
     },
     {
       "diagnosis_id": "d5",
       "claim_id": "c7",
       "hallucination_type": "poi_visualization_error",
-      "mechanism": "B1",
-      "severity": "medium",
       "evidence": "The Notion itinerary database has 17 entries but the travel plan has 18 schedule entries. SFMOMA (Day 3, 14:00-15:30) is missing from the Notion output. This is a tool routing error — the Notion visualization tool dropped an entry during database creation.",
       "ground_truth": "Notion itinerary should have 18 entries matching the plan exactly.",
-      "causal_chain": [7, 8],
+      "causal_chain": [
+        7,
+        8
+      ],
       "fix_suggestion": "Re-run Notion visualization tool. Verify all plan entries are present in the Notion database before finalizing."
+    },
+    {
+      "diagnosis_id": "d6",
+      "claim_id": "c1",
+      "hallucination_type": "poi_schedule_error",
+      "evidence": "The itinerary schedules Golden Gate Bridge Welcome Center at 08:00-10:00 on Day 1, but the POI opening hours in plan data are 09:00-18:00 for Thursday. The first hour is outside operating hours.",
+      "ground_truth": "Golden Gate Bridge Welcome Center should not be scheduled before 09:00 on Thursday.",
+      "causal_chain": [
+        2,
+        5
+      ],
+      "fix_suggestion": "Move the visit start time to 09:00 or later, or reorder Day 1 entries to satisfy opening hours."
     }
   ]
 }

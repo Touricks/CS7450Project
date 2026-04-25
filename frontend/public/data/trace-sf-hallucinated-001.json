@@ -65,6 +65,18 @@
         8
       ],
       "fix_suggestion": "Re-run Notion visualization tool. Verify all plan entries are present in the Notion database before finalizing."
+    },
+    {
+      "diagnosis_id": "d6",
+      "claim_id": "c1",
+      "hallucination_type": "poi_schedule_error",
+      "evidence": "The itinerary schedules Golden Gate Bridge Welcome Center at 08:00-10:00 on Day 1, but the POI opening hours in plan data are 09:00-18:00 for Thursday. The first hour is outside operating hours.",
+      "ground_truth": "Golden Gate Bridge Welcome Center should not be scheduled before 09:00 on Thursday.",
+      "causal_chain": [
+        2,
+        5
+      ],
+      "fix_suggestion": "Move the visit start time to 09:00 or later, or reorder Day 1 entries to satisfy opening hours."
     }
   ]
 }
